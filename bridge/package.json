@@ -1,0 +1,14 @@
+{
+  "name": "lollyd-ws-bridge",
+  "version": "1.0.0",
+  "description": "Serial-to-WebSocket bridge for LollyD Travel Sensor (Arduino UNO)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "serialport": "^12.0.0",
+    "ws": "^8.18.0"
+  }
+}
