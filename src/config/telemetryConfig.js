@@ -34,7 +34,7 @@ export const TELEMETRY_CONFIG = {
 
   // Sensor Validation Bounds
   BOUNDS: {
-    temperature: { min: -40, max: 85, unit: '°C' },
+    temperature: { min: -40, max: 1200, unit: '°C' },
     humidity: { min: 0, max: 100, unit: '%' },
     pressure: { min: 300, max: 1200, unit: 'hPa' },
     altitude: { min: -500, max: 9000, unit: 'm' },
