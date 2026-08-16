@@ -97,6 +97,20 @@ export default function MetricGauge({
 
   return (
     <div className="gauge-container" style={{ width: '100%', maxWidth: size, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* Color range legend — above the meter */}
+      {showLegend && (
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+          {['#34d399', '#f59e0b', '#f97316', '#ef4444'].map((c, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, opacity: 0.9, border: '1px solid rgba(255,255,255,0.1)' }} />
+              <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 700 }}>
+                {(segs[i] || 0).toFixed(0)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <svg width="100%" height="auto" viewBox={`0 0 ${size} ${size * 0.75}`} style={{ maxWidth: size, overflow: 'visible', display: 'block' }}>
         {/* Background colored arcs (Static segments like reference) */}
         {bgArcs.map((arc, i) => (
@@ -148,20 +162,6 @@ export default function MetricGauge({
       {label && (
         <div style={{ textAlign: 'center', marginTop: -8 }}>
           <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
-        </div>
-      )}
-
-      {/* Color legend */}
-      {showLegend && (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-          {['#34d399', '#f59e0b', '#f97316', '#ef4444'].map((c, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, opacity: 0.9, border: '1px solid rgba(255,255,255,0.1)' }} />
-              <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 700 }}>
-                {(segs[i] || 0).toFixed(0)}
-              </span>
-            </div>
-          ))}
         </div>
       )}
     </div>
