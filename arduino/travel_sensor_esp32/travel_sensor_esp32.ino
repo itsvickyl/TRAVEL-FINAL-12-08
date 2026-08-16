@@ -35,8 +35,7 @@ const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";  // Change to your Wi-Fi / Mob
 // Cloud Relay WebSocket Server
 const char* WS_HOST = "lollyd-relay.onrender.com"; // Render.com host (without wss://)
 const int   WS_PORT = 443;                          // SSL port for wss://
-const char* WS_PATH = "/";
-const char* RELAY_KEY = "lollyd-travel-2024";
+const char* RELAY_KEY = "YOUR_SECURE_RELAY_KEY"; // Set to match your Render RELAY_KEY environment variable
 
 // ─── PIN MAP (ESP32) ────────────────────────
 #define GPS_RX_PIN    16   // ESP32 RX2 ← GPS TX

@@ -1376,7 +1376,7 @@ All the code is ready! Now you need to deploy. Here are the two remaining steps:
    | **Start Command** | `node server.js` |
    | **Plan** | Free |
 
-4. Add environment variable: `RELAY_KEY` = `lollyd-travel-2024`
+4. Add environment variable: `RELAY_KEY` = `YOUR_SECURE_SECRET_KEY` (Or let Render auto-generate a secure key via render.yaml)
 
 5. Click **Deploy** → You'll get a URL like: `https://lollyd-relay.onrender.com`
 

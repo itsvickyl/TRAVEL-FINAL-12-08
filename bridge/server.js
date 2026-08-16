@@ -31,7 +31,7 @@ const RECONNECT_INTERVAL = 3000; // ms
 // Cloud relay — set this to your deployed Render.com URL
 // Example: wss://lollyd-relay.onrender.com
 const RELAY_URL = process.env.RELAY_URL || null;
-const RELAY_KEY = process.env.RELAY_KEY || 'lollyd-travel-2024';
+const RELAY_KEY = process.env.RELAY_KEY || '';
 
 // ─── STATE ─────────────────────────────────
 let serialPort = null;

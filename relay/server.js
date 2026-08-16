@@ -9,7 +9,7 @@ const { WebSocketServer } = require('ws');
 const http = require('http');
 
 const PORT = process.env.PORT || 3001;
-const RELAY_KEY = process.env.RELAY_KEY || 'lollyd-travel-2024';
+const RELAY_KEY = process.env.RELAY_KEY; // Must be set via environment variable
 const MAX_PAYLOAD_BYTES = 10 * 1024; // 10 KB limit per packet
 const MAX_RATE_PER_SEC = 25; // Max 25 msgs/sec per publisher to prevent flooding
 
@@ -135,10 +135,10 @@ wss.on('connection', (ws, req) => {
     // 2. Handshake / Role Authentication
     if (!identified) {
       if (parsed.role === 'publisher') {
-        if (parsed.key !== RELAY_KEY) {
+        if (!RELAY_KEY || parsed.key !== RELAY_KEY) {
           console.warn(`[WS] Publisher auth failed from ${ip}`);
           try {
-            ws.send(JSON.stringify({ error: 'Unauthorized: Invalid relay key' }));
+            ws.send(JSON.stringify({ error: 'Unauthorized: Invalid or unconfigured relay key' }));
             ws.close(4001, 'Unauthorized');
           } catch {}
           clearTimeout(identifyTimeout);
