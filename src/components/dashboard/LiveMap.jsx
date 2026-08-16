@@ -64,8 +64,10 @@ function MapController({ position, isFollowing, setIsFollowing }) {
 export default function LiveMap({ data, history }) {
   const [isFollowing, setIsFollowing] = useState(true);
   const [mapStyle, setMapStyle] = useState('dark');
-  const position = data ? [data.lat, data.lng] : [0, 0];
   const mapRef = useRef(null);
+
+  const hasFix = data && typeof data.lat === 'number' && typeof data.lng === 'number' && (Math.abs(data.lat) > 0.0001 || Math.abs(data.lng) > 0.0001);
+  const position = hasFix ? [data.lat, data.lng] : [12.9716, 77.5946];
 
   // Battery & range calculation (same formula as Prediction page)
   const batteryPct = data ? Math.min(100, Math.max(0, ((data.batteryVoltage - 10) / 4.5) * 100)) : 0;
@@ -76,28 +78,28 @@ export default function LiveMap({ data, history }) {
   // Build trail from last 100 history points
   const trail = history
     .slice(-100)
-    .filter((p) => p.lat && p.lng)
+    .filter((p) => p.lat && p.lng && (Math.abs(p.lat) > 0.0001 || Math.abs(p.lng) > 0.0001))
     .map((p) => [p.lat, p.lng]);
 
   const handleRecenter = () => {
     setIsFollowing(true);
-    if (mapRef.current && data) {
-      mapRef.current.setView([data.lat, data.lng], 15, { animate: true, duration: 0.8 });
+    if (mapRef.current) {
+      mapRef.current.setView(position, 15, { animate: true, duration: 0.8 });
     }
   };
 
   return (
-    <div className="widget" style={{ padding: 0, overflow: 'hidden', height: '100%', minHeight: 220, position: 'relative' }}>
+    <div className="widget" style={{ padding: 0, overflow: 'hidden', height: '100%', minHeight: 220, position: 'relative', borderRadius: 'var(--radius-lg)' }}>
       {/* Coordinate overlay */}
       <div style={{
         position: 'absolute', top: 10, left: 10, zIndex: 1000,
         background: 'rgba(7,16,24,0.85)', backdropFilter: 'blur(8px)',
         padding: '4px 10px', borderRadius: 'var(--radius-sm)',
         border: '1px solid var(--border)',
-        fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)',
+        fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: hasFix ? 'var(--text-primary)' : 'var(--accent-orange)',
         pointerEvents: 'none'
       }}>
-        {data ? `${data.lat.toFixed(4)}°N  ${data.lng.toFixed(4)}°E` : 'Acquiring...'}
+        {hasFix ? `${data.lat.toFixed(4)}°N  ${data.lng.toFixed(4)}°E` : '🛰️ GPS Acquiring...'}
       </div>
 
       {/* Range badge */}

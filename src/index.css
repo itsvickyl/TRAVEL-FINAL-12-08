@@ -847,6 +847,12 @@ h6 { font-size: 1rem; }
   overflow-y: auto;
 }
 
+.leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+  background: #0c1a2a !important;
+}
+
 /* Responsive Media Queries for Dashboard */
 @media (max-width: 1200px) {
   .dashboard {
@@ -866,7 +872,9 @@ h6 { font-size: 1rem; }
     display: flex;
   }
   .mobile-only-status-section {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
   .gauge-card-content {
     max-width: 260px;

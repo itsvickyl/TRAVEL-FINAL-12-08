@@ -349,31 +349,72 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
 
         {/* Section: MAP & IMU (Inlined on mobile screens) */}
         {(mobileTab === 'all' || mobileTab === 'map') && (
-          <div className="mobile-only-status-section">
-            <div style={{ minHeight: 280, display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
+          <div className="mobile-only-status-section" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Live GPS Map */}
+            <div style={{ height: 230, width: '100%' }}>
               <LiveMap data={data} history={history} />
             </div>
-            <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px', marginBottom: 10, overflow: 'visible' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.1em', alignSelf: 'flex-start' }}>MPU-6050 GYRO</div>
-              <OrientationCube pitch={data?.pitch} roll={data?.roll} yaw={data?.yaw} />
-            </div>
-            {/* Coordinates and Satellites */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
+
+            {/* GPS Telemetry Strip — immediately fills below the map */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
               <div className="env-card" style={{ padding: '8px 10px' }}>
                 <div className="env-card-info">
-                  <div className="env-card-label">LAT / LNG</div>
-                  <div className="mono" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                    {data?.lat?.toFixed(3) || '0.000'}, {data?.lng?.toFixed(3) || '0.000'}
+                  <div className="env-card-label">GPS FIX</div>
+                  <div className="mono" style={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                    {data && (data.lat !== 0 || data.lng !== 0) ? `${data.lat?.toFixed(3)}, ${data.lng?.toFixed(3)}` : 'Acquiring'}
                   </div>
                 </div>
               </div>
               <div className="env-card" style={{ padding: '8px 10px' }}>
                 <div className="env-card-info">
-                  <div className="env-card-label">SATS / PIR</div>
-                  <div className="mono" style={{ fontSize: '0.8rem', fontWeight: 700, color: data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)' }}>
-                    {data?.satellites || 0} Sats · {data?.motionDetected ? '🔴 Motion' : '⚪ Clear'}
+                  <div className="env-card-label">SATS</div>
+                  <div className="mono" style={{ fontSize: '0.78rem', fontWeight: 700, color: (data?.satellites || 0) >= 4 ? 'var(--accent-green)' : 'var(--accent-orange)' }}>
+                    {data?.satellites || 0} locked
                   </div>
                 </div>
+              </div>
+              <div className="env-card" style={{ padding: '8px 10px' }}>
+                <div className="env-card-info">
+                  <div className="env-card-label">ALTITUDE</div>
+                  <div className="mono" style={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                    {data?.altitude ? `${data.altitude.toFixed(0)} m` : '0 m'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3D Gyroscope (MPU-6050) */}
+            <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '14px', overflow: 'visible' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.1em', alignSelf: 'flex-start' }}>MPU-6050 GYRO</div>
+              <OrientationCube pitch={data?.pitch} roll={data?.roll} yaw={data?.yaw} />
+            </div>
+
+            {/* Mobile Status Badges */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                borderRadius: 'var(--radius-full)',
+                background: data?.motionDetected ? 'var(--danger-glow)' : 'var(--accent-green-glow)',
+                border: `1px solid ${data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)'}`,
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)',
+                }} />
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)' }}>
+                  PIR: {data?.motionDetected ? 'Motion Detected' : 'Motion Clear'}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                borderRadius: 'var(--radius-full)',
+                background: data ? 'var(--accent-green-glow)' : 'var(--danger-glow)',
+                border: `1px solid ${data ? 'var(--accent-green)' : 'var(--danger)'}`,
+              }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: data ? 'var(--accent-green)' : 'var(--danger)' }} />
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: data ? 'var(--accent-green)' : 'var(--danger)' }}>
+                  {data ? `PWR: ${data?.batteryVoltage?.toFixed(1) || '5.0'}V` : 'Disconnected'}
+                </span>
               </div>
             </div>
           </div>
