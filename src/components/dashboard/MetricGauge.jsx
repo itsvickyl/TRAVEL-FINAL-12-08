@@ -15,6 +15,9 @@ export default function MetricGauge({
   showLegend = true,
   thresholds, // [green, yellow, orange, red] boundaries, e.g. [20, 35, 42, 50]
 }) {
+  const isValueValid = typeof value === 'number' && Number.isFinite(value);
+  const numericVal = isValueValid ? value : min;
+
   const { bgArcs, needleAngle, ticks, segs, activeColor } = useMemo(() => {
     const cx = size / 2;
     const cy = size * 0.48; // Centered slightly above midpoint so arch is balanced
@@ -69,13 +72,18 @@ export default function MetricGauge({
     }
 
     // Active color based on current value
-    const actColor =
-      value >= segments[2] ? '#ef4444' :
-      value >= segments[1] ? '#f97316' :
-      value >= segments[0] ? '#f59e0b' : '#34d399';
+    const actColor = !isValueValid
+      ? 'var(--text-dim)'
+      : numericVal >= segments[2]
+      ? '#ef4444'
+      : numericVal >= segments[1]
+      ? '#f97316'
+      : numericVal >= segments[0]
+      ? '#f59e0b'
+      : '#34d399';
 
     // Needle rotation angle (degrees from positive X-axis)
-    const pct = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    const pct = Math.max(0, Math.min(1, (numericVal - min) / (max - min)));
     const curAngle = startAngle + totalAngle * pct;
     const nAngle = curAngle - 90;
 
@@ -103,7 +111,7 @@ export default function MetricGauge({
       segs: segments,
       activeColor: actColor,
     };
-  }, [value, min, max, size, thresholds]);
+  }, [numericVal, isValueValid, min, max, size, thresholds]);
 
   const cx = size / 2;
   const cy = size * 0.48;
@@ -152,8 +160,8 @@ export default function MetricGauge({
             stroke={arc.color}
             strokeWidth="9"
             strokeLinecap="round"
-            opacity="0.9"
-            style={{ filter: `drop-shadow(0 0 6px ${arc.color}35)` }}
+            opacity={isValueValid ? 0.9 : 0.3}
+            style={{ filter: isValueValid ? `drop-shadow(0 0 6px ${arc.color}35)` : 'none' }}
           />
         ))}
 
@@ -194,7 +202,7 @@ export default function MetricGauge({
             stroke={activeColor}
             strokeWidth="2.5"
             strokeLinecap="round"
-            style={{ filter: `drop-shadow(0 0 5px ${activeColor})` }}
+            style={{ filter: isValueValid ? `drop-shadow(0 0 5px ${activeColor})` : 'none' }}
           />
         </g>
 
@@ -212,7 +220,7 @@ export default function MetricGauge({
           fontSize={size > 160 ? '1.55rem' : '1.25rem'}
           fontWeight="800"
         >
-          {typeof value === 'number' ? value.toFixed(1) : value}
+          {isValueValid ? value.toFixed(1) : '—'}
         </text>
         <text
           x={cx}
@@ -235,4 +243,3 @@ export default function MetricGauge({
     </div>
   );
 }
-

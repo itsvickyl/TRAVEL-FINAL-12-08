@@ -1,6 +1,7 @@
 export default function RawTelemetryTable({ data }) {
   const cols = [
     [
+      { label: 'Packet Seq:', key: 'seq', unit: '', sensor: 'Telemetry' },
       { label: 'Temperature:', key: 'temperature', unit: '°C', sensor: 'DHT11' },
       { label: 'Humidity:', key: 'humidity', unit: '%', sensor: 'DHT11' },
       { label: 'Pressure:', key: 'pressure', unit: 'hPa', sensor: 'BMP280' },
@@ -15,21 +16,30 @@ export default function RawTelemetryTable({ data }) {
       { label: 'gX:', key: 'gX', unit: '°/s', sensor: 'MPU-6050' },
       { label: 'gY:', key: 'gY', unit: '°/s', sensor: 'MPU-6050' },
       { label: 'gZ:', key: 'gZ', unit: '°/s', sensor: 'MPU-6050' },
+      { label: 'Pitch / Roll:', key: 'pitchRoll', unit: '°', sensor: 'MPU-6050', combined: true },
     ],
     [
       { label: 'Latitude:', key: 'lat', unit: '°', sensor: 'NEO-6M' },
       { label: 'Longitude:', key: 'lng', unit: '°', sensor: 'NEO-6M' },
       { label: 'Satellites:', key: 'satellites', unit: '', sensor: 'NEO-6M' },
       { label: 'LoRa RSSI:', key: 'loraRSSI', unit: 'dBm', sensor: 'Ra-02' },
-      { label: 'Supply V:', key: 'batteryVoltage', unit: 'V', sensor: 'Arduino' },
+      { label: 'Supply V:', key: 'batteryVoltage', unit: 'V', sensor: 'MCU' },
+      { label: 'SD Logging:', key: 'sdStatus', unit: '', sensor: 'MicroSD' },
       { label: 'Device Uptime:', key: 'uptime', unit: 's', sensor: 'System' },
     ]
   ];
 
   return (
     <div className="widget" style={{ padding: '20px 24px' }}>
-      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 16, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-        Raw Sensor Telemetry
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          Raw Validated Telemetry Stream
+        </div>
+        {data?.seq !== undefined && (
+          <span style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--primary)', background: 'var(--primary-glow)', padding: '2px 8px', borderRadius: 4 }}>
+            SEQ #{data.seq}
+          </span>
+        )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px' }}>
         {cols.map((col, cIdx) => (
@@ -37,8 +47,15 @@ export default function RawTelemetryTable({ data }) {
             {col.map((item) => {
               const val = data?.[item.key];
               let displayVal;
-              if (item.key === 'motionDetected') {
-                displayVal = val ? '🔴 YES' : '⚪ NO';
+
+              if (item.combined && item.key === 'pitchRoll') {
+                const p = typeof data?.pitch === 'number' ? data.pitch.toFixed(1) : '—';
+                const r = typeof data?.roll === 'number' ? data.roll.toFixed(1) : '—';
+                displayVal = `${p}° / ${r}°`;
+              } else if (item.key === 'sdStatus') {
+                displayVal = data?.sdStatus || 'UNKNOWN';
+              } else if (item.key === 'motionDetected') {
+                displayVal = data?.pirStatus === 'CALIBRATING' ? 'CALIBRATING' : val ? '🔴 YES' : '⚪ NO';
               } else if (item.key === 'uptime') {
                 if (typeof val === 'number' && val > 0) {
                   const m = Math.floor(val / 60);
@@ -48,7 +65,9 @@ export default function RawTelemetryTable({ data }) {
                   displayVal = data?.timestamp ? 'Connected' : '—';
                 }
               } else {
-                displayVal = typeof val === 'number' ? val.toFixed(item.key === 'lat' || item.key === 'lng' ? 4 : 1) : '—';
+                displayVal = typeof val === 'number' && Number.isFinite(val)
+                  ? val.toFixed(item.key === 'lat' || item.key === 'lng' ? 4 : item.key === 'seq' ? 0 : 1)
+                  : '—';
               }
               
               return (
@@ -64,13 +83,13 @@ export default function RawTelemetryTable({ data }) {
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                     <span style={{ 
                       color: item.key === 'motionDetected' 
-                        ? (val ? 'var(--danger)' : 'var(--accent-green)') 
+                        ? (data?.pirStatus === 'CALIBRATING' ? 'var(--accent-orange)' : val ? 'var(--danger)' : 'var(--accent-green)') 
                         : (displayVal === '—' ? 'var(--text-dim)' : 'var(--text-primary)'), 
                       fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 700 
                     }}>
                       {displayVal}
                     </span>
-                    {item.unit && (
+                    {item.unit && displayVal !== '—' && (
                       <span style={{ color: 'var(--text-dim)', fontSize: '0.65rem', fontWeight: 500 }}>
                         {item.unit}
                       </span>

@@ -1,24 +1,27 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Compass, Wifi, WifiOff, Radio, Zap, Battery, Settings, BrainCircuit, LogOut, Menu, X } from 'lucide-react';
+import { Compass, Radio, BrainCircuit, LogOut, Menu, X, Activity, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-export default function DashboardNavbar({ connected, connectionState, messageCount, onDisconnect, data }) {
+export default function DashboardNavbar({
+  connected,
+  connectionState,
+  displayStatus,
+  stats = {},
+  onDisconnect,
+  data
+}) {
   const { user, logout } = useAuth();
   const [time, setTime] = useState(new Date());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [connectStartTime, setConnectStartTime] = useState(null);
 
   useEffect(() => {
     const int = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(int);
   }, []);
 
-  const [connectStartTime, setConnectStartTime] = useState(null);
-
-  const isReconnecting = connectionState === 'reconnecting';
-  const hasReceivedData = messageCount > 0 && !!data?.timestamp;
-  const stateLabel = isReconnecting ? 'RECONNECTING' : (connected && hasReceivedData) ? 'LIVE ACTIVE' : connected ? 'CONNECTED (AWAITING DATA)' : 'DISCONNECTED';
-  const stateColor = (connected && hasReceivedData) ? 'var(--accent-green)' : connected ? 'var(--accent-orange)' : 'var(--danger)';
+  const hasReceivedData = stats?.packetsReceived > 0 && !!data?.timestamp;
 
   useEffect(() => {
     if (connected && hasReceivedData) {
@@ -30,7 +33,7 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
     }
   }, [connected, hasReceivedData, connectStartTime]);
 
-  // Calculate uptime in seconds
+  // Calculate uptime in seconds (prefer MCU uptime if available)
   const totalUptimeSec = data?.uptime && typeof data.uptime === 'number' && data.uptime > 0
     ? Math.floor(data.uptime)
     : connectStartTime
@@ -46,10 +49,22 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
   };
 
   const uptimeStr = formatUptime(totalUptimeSec);
-  const timeStr = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const updatedStr = hasReceivedData ? new Date(data.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Awaiting data';
+  const updatedStr = hasReceivedData && data?.timestamp
+    ? new Date(data.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : 'Awaiting data';
 
-  // Arduino supply voltage (3.0V-5.2V range)
+  // Status color logic
+  const isLive = connectionState === 'live_active';
+  const isWaiting = connectionState === 'connected_waiting';
+  const isReconnecting = connectionState === 'reconnecting';
+  const isStale = stats?.freshness === 'STALE';
+
+  const statusBadgeColor =
+    isLive && !isStale ? 'var(--accent-green)' :
+    isLive && isStale ? 'var(--accent-orange)' :
+    isWaiting || isReconnecting ? 'var(--accent-orange)' : 'var(--danger)';
+
+  // Supply voltage indicator
   const supplyPct = data?.batteryVoltage ? Math.min(100, Math.max(0, ((data.batteryVoltage - 3.0) / 2.2) * 100)) : 0;
   const supplyColor = !data?.batteryVoltage ? 'var(--text-muted)' : supplyPct < 20 ? 'var(--danger)' : supplyPct < 50 ? 'var(--accent-orange)' : 'var(--accent-green)';
 
@@ -66,28 +81,32 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
           <span>TRAVEL <span className="text-gradient">SENSOR</span></span>
         </Link>
 
-        {/* Connection badge */}
+        {/* Connection status badge */}
         <div className="dashboard-badge-item connection-badge-wrap">
-          <div className={`connection-dot ${connected && hasReceivedData ? 'connected' : 'disconnected'}`}
-            style={isReconnecting ? { animation: 'pulse 0.5s infinite', background: 'var(--accent-orange)' } : !hasReceivedData && connected ? { background: 'var(--accent-orange)' } : {}} />
-          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: (connected && hasReceivedData) ? 'var(--accent-green)' : connected ? 'var(--accent-orange)' : 'var(--danger)' }}>
-            {connected && hasReceivedData ? 'LIVE' : connected ? 'CONNECTING' : 'OFFLINE'}
+          <div
+            className={`connection-dot ${isLive ? 'connected' : 'disconnected'}`}
+            style={{
+              background: statusBadgeColor,
+              animation: isReconnecting ? 'pulse 0.6s infinite' : isStale ? 'pulse 1.5s infinite' : 'none',
+            }}
+          />
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: statusBadgeColor }}>
+            {displayStatus || (isLive ? 'LIVE' : isWaiting ? 'AWAITING DATA' : isReconnecting ? 'RECONNECTING' : 'OFFLINE')}
           </span>
         </div>
 
-        {/* Desktop-only secondary stats */}
+        {/* Desktop-only secondary status metrics */}
         <div className="dashboard-stats-desktop">
           <div className="topbar-divider" />
-          <span style={{
-            fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em',
-            color: stateColor, fontFamily: 'var(--font-mono)',
-          }}>
-            STATUS: {stateLabel}
+          <span className="mono" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+            RATE: <span style={{ color: stats?.telemetryRateHz > 0 ? 'var(--accent-green)' : 'var(--text-dim)', fontWeight: 700 }}>
+              {stats?.telemetryRateHz ? `${stats.telemetryRateHz.toFixed(2)} Hz` : '0.00 Hz'}
+            </span>
           </span>
 
           <div className="topbar-divider" />
           <span className="mono" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-            UPTIME: <span style={{ color: connected && hasReceivedData ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 700 }}>{uptimeStr}</span>
+            UPTIME: <span style={{ color: isLive ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 700 }}>{uptimeStr}</span>
           </span>
 
           <div className="topbar-divider" />
@@ -161,7 +180,13 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
           <div className="mobile-drawer-stats">
             <div className="mobile-stat-row">
               <span className="mobile-stat-label">STATUS</span>
-              <span className="mono font-bold" style={{ color: stateColor }}>{stateLabel}</span>
+              <span className="mono font-bold" style={{ color: statusBadgeColor }}>{displayStatus}</span>
+            </div>
+            <div className="mobile-stat-row">
+              <span className="mobile-stat-label">RATE</span>
+              <span className="mono font-bold" style={{ color: 'var(--accent-green)' }}>
+                {stats?.telemetryRateHz ? `${stats.telemetryRateHz.toFixed(2)} Hz` : '0.00 Hz'}
+              </span>
             </div>
             <div className="mobile-stat-row">
               <span className="mobile-stat-label">DEVICE UPTIME</span>
@@ -197,12 +222,12 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
             >
               <Compass size={16} /> Travel Planner
             </Link>
-            {onDisconnect && (connected || isDemo) && (
+            {onDisconnect && (
               <button 
                 className="btn btn-secondary btn-md w-full justify-center"
                 onClick={() => { setMobileMenuOpen(false); onDisconnect(); }}
               >
-                <WifiOff size={16} /> Reconnect / Change Source
+                Change Source / Reconnect
               </button>
             )}
             <button

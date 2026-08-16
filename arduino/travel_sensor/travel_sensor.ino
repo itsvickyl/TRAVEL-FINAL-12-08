@@ -1,29 +1,24 @@
 /*
- * LollyD Travel Sensor — Arduino UNO
- * ===================================
- * Reads all sensors and sends JSON over Serial every ~1 second.
+ * LollyD Travel Sensor — Arduino Nano Every / UNO (Production Hardened)
+ * ======================================================================
+ * High-reliability multi-sensor flight/travel telemetry logger.
  *
- * HARDWARE:
- *   Arduino UNO (ATmega328P)
- *   NEO-6M GPS       → Software Serial (RX=D4, TX=D3)
- *   MPU-6050 IMU     → I2C (SDA=A4, SCL=A5) addr 0x68
- *   BMP280           → I2C (SDA=A4, SCL=A5) addr 0x76
- *   DHT11            → Digital pin D2
- *   MQ-135           → Analog pin A0
- *   HC-SR501 PIR     → Digital pin D5
- *   Ra-02 LoRa       → SPI (CS=D10, MOSI=D11, MISO=D12, SCK=D13)
- *                       + RST=D9, DIO0=D8 (interrupt)
+ * SENSORS & PERIPHERALS:
+ *   - NEO-6M GPS       → SoftwareSerial (RX=D4, TX=D3)
+ *   - MPU-6050 IMU     → I2C (SDA=A4, SCL=A5) addr 0x68
+ *   - BMP280           → I2C (SDA=A4, SCL=A5) addr 0x76
+ *   - DHT11            → Digital pin D2
+ *   - MQ-135           → Analog pin A0
+ *   - HC-SR501 PIR     → Digital pin D5 (60s non-blocking warm-up)
+ *   - Ra-02 LoRa       → SPI (CS=D10, RST=D9, DIO0=D8)
+ *   - MicroSD Logger   → SPI (CS=D6) -> /trip_log.csv
  *
- * LIBRARIES REQUIRED (install via Arduino Library Manager):
- *   - TinyGPSPlus
- *   - DHT sensor library (Adafruit)
- *   - Adafruit BMP280 Library
- *   - Adafruit Unified Sensor
- *   - LoRa (by Sandeep Mistry)
- *
- * ─────────────────────────────────────────────
- * PIN MAP (adjust these if your wiring differs)
- * ─────────────────────────────────────────────
+ * PRODUCTION HARDENING:
+ *   - Monotonic sequence numbers (seq)
+ *   - Isolated sensor failure handling (one sensor failure won't crash loop)
+ *   - Non-blocking PIR warm-up (suppresses false positives for first 60s)
+ *   - Safe SD flush with corruption protection
+ *   - Real hardware sensor health mapping
  */
 
 #include <Wire.h>
@@ -35,7 +30,7 @@
 #include <LoRa.h>
 #include <SD.h>
 
-// ─── PIN CONFIGURATION ──────────────────────
+// ─── PIN MAP ────────────────────────────────
 #define GPS_RX_PIN    4    // GPS TX → Arduino D4
 #define GPS_TX_PIN    3    // GPS RX → Arduino D3
 #define DHT_PIN       2    // DHT11 data pin
@@ -47,52 +42,65 @@
 #define LORA_RST_PIN  9    // Ra-02 RST
 #define LORA_DIO0_PIN 8    // Ra-02 DIO0
 
+#define MPU_ADDR      0x68
+
+// ─── CONSTANTS & TIMING ─────────────────────
+const unsigned long SEND_INTERVAL = 1000;    // 1 second telemetry loop
+const unsigned long PIR_WARMUP_MS = 60000;   // 60-second non-blocking PIR warm-up
+
 // ─── OBJECTS ────────────────────────────────
 SoftwareSerial gpsSerial(GPS_RX_PIN, GPS_TX_PIN);
 TinyGPSPlus gps;
 DHT dht(DHT_PIN, DHT_TYPE);
 Adafruit_BMP280 bmp;
 
-// ─── MPU-6050 REGISTERS ─────────────────────
-#define MPU_ADDR 0x68
-
-// ─── TIMING ─────────────────────────────────
+// ─── STATE & HEALTH TRACKING ────────────────
+unsigned long seqNumber = 0;
 unsigned long lastSendTime = 0;
-const unsigned long SEND_INTERVAL = 1000; // 1 second
-
-// ─── SENSOR DATA ────────────────────────────
-float gpsLat = 0, gpsLng = 0, gpsSpeed = 0, gpsHeading = 0;
-int gpsSatellites = 0;
-float accelX = 0, accelY = 0, accelZ = 0;
-float gyroX = 0, gyroY = 0, gyroZ = 0;
-float pitch = 0, roll = 0, yaw = 0;
-float bmpPressure = 0, bmpAltitude = 0;
-float dhtTemp = 0, dhtHumidity = 0;
-int airQualityRaw = 0;
-float airQualityPPM = 0;
-bool motionDetected = false;
-int loraRSSI = 0;
-float loraSNR = 0;
-float signalStrength = 0;
-float supplyVoltage = 0;
 
 bool bmpReady = false;
+bool mpuReady = false;
+bool dhtReady = false;
 bool loraReady = false;
 bool sdReady = false;
+
+// Sensor Readings
+float gpsLat = 0.0, gpsLng = 0.0, gpsSpeed = 0.0, gpsHeading = 0.0;
+int gpsSatellites = 0;
+float accelX = 0.0, accelY = 0.0, accelZ = 0.0;
+float gyroX = 0.0, gyroY = 0.0, gyroZ = 0.0;
+float pitch = 0.0, roll = 0.0, yaw = 0.0;
+float bmpPressure = 0.0, bmpAltitude = 0.0;
+float dhtTemp = 0.0, dhtHumidity = 0.0;
+int airQualityRaw = 0;
+float airQualityPPM = 0.0;
+bool motionDetected = false;
+int loraRSSI = 0;
+float loraSNR = 0.0;
+float signalStrength = 0.0;
+float supplyVoltage = 5.0;
 
 void setup() {
   Serial.begin(9600);
   gpsSerial.begin(9600);
-  dht.begin();
   Wire.begin();
 
-  // ── Init MPU-6050 ──
+  // 1. Init DHT11
+  dht.begin();
+  dhtReady = true;
+
+  // 2. Init MPU-6050 (with failure isolation)
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x6B); // PWR_MGMT_1
   Wire.write(0x00); // Wake up
-  Wire.endTransmission(true);
+  if (Wire.endTransmission(true) == 0) {
+    mpuReady = true;
+  } else {
+    mpuReady = false;
+    Serial.println(F("{\"warn\":\"MPU-6050 init failed\"}"));
+  }
 
-  // ── Init BMP280 ──
+  // 3. Init BMP280 (with failure isolation)
   if (bmp.begin(0x76)) {
     bmpReady = true;
     bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,
@@ -101,13 +109,14 @@ void setup() {
                     Adafruit_BMP280::FILTER_X16,
                     Adafruit_BMP280::STANDBY_MS_500);
   } else {
-    Serial.println(F("{\"error\":\"BMP280 not found at 0x76\"}"));
+    bmpReady = false;
+    Serial.println(F("{\"warn\":\"BMP280 not found at 0x76\"}"));
   }
 
-  // ── Init PIR ──
+  // 4. Init PIR Pin
   pinMode(PIR_PIN, INPUT);
 
-  // ── Init LoRa Ra-02 ──
+  // 5. Init LoRa (with failure isolation)
   LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
   if (LoRa.begin(433E6)) {
     loraReady = true;
@@ -115,43 +124,42 @@ void setup() {
     LoRa.setSignalBandwidth(125E3);
     LoRa.setCodingRate4(5);
   } else {
-    Serial.println(F("{\"error\":\"LoRa Ra-02 init failed\"}"));
+    loraReady = false;
+    Serial.println(F("{\"warn\":\"LoRa Ra-02 init failed\"}"));
   }
 
-  // ── Init MicroSD Card (FAT32) ──
+  // 6. Init MicroSD Logger (with failure isolation & header generation)
   if (SD.begin(SD_CS_PIN)) {
     sdReady = true;
-    // Create / append header if file is empty
     File logFile = SD.open("trip_log.csv", FILE_WRITE);
     if (logFile) {
       if (logFile.size() == 0) {
-        logFile.println(F("timestamp_ms,lat,lng,speed,sats,alt,temp,humidity,pressure,aqi,pitch,roll,yaw,motion"));
+        logFile.println(F("seq,uptime_s,lat,lng,speed_kmh,sats,alt_m,temp_c,humidity_pct,pressure_hpa,aqi_ppm,pitch,roll,yaw,motion"));
       }
+      logFile.flush();
       logFile.close();
     }
-    Serial.println(F("{\"info\":\"MicroSD Card 16GB ready (logging to trip_log.csv)\"}"));
+    Serial.println(F("{\"info\":\"MicroSD logging active (/trip_log.csv)\"}"));
   } else {
-    Serial.println(F("{\"warn\":\"MicroSD Card not detected on pin D6\"}"));
+    sdReady = false;
+    Serial.println(F("{\"warn\":\"MicroSD Card init failed on D6\"}"));
   }
 
-  // ── Read supply voltage ──
-  // Using internal 1.1V reference to measure Vcc
-  // This is an approximation
-  supplyVoltage = readVcc() / 1000.0;
-
-  Serial.println(F("{\"status\":\"LollyD Travel Sensor initialized\"}"));
-  delay(1000); // Let PIR sensor stabilize
+  supplyVoltage = readSupplyVoltage() / 1000.0;
+  Serial.println(F("{\"status\":\"LollyD Sensor Hub Ready\"}"));
 }
 
 void loop() {
-  // ── Always feed GPS data ──
+  // Feed GPS byte stream constantly
   while (gpsSerial.available() > 0) {
     gps.encode(gpsSerial.read());
   }
 
-  // ── Send telemetry at interval ──
-  if (millis() - lastSendTime >= SEND_INTERVAL) {
-    lastSendTime = millis();
+  // Telemetry loop trigger
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastSendTime >= SEND_INTERVAL) {
+    lastSendTime = currentMillis;
+    seqNumber++;
 
     readGPS();
     readMPU6050();
@@ -160,14 +168,14 @@ void loop() {
     readMQ135();
     readPIR();
     readLoRa();
-    supplyVoltage = readVcc() / 1000.0;
+    supplyVoltage = readSupplyVoltage() / 1000.0;
 
     logToSD();
-    sendJSON();
+    sendTelemetryJSON();
   }
 }
 
-// ─── GPS (NEO-6M) ───────────────────────────
+// ─── GPS READING ────────────────────────────
 void readGPS() {
   if (gps.location.isValid()) {
     gpsLat = gps.location.lat();
@@ -182,115 +190,116 @@ void readGPS() {
   gpsSatellites = gps.satellites.value();
 }
 
-// ─── IMU (MPU-6050) ─────────────────────────
+// ─── MPU-6050 IMU ───────────────────────────
 void readMPU6050() {
+  if (!mpuReady) return;
+
   Wire.beginTransmission(MPU_ADDR);
-  Wire.write(0x3B); // Starting register for accel
-  Wire.endTransmission(false);
-  Wire.requestFrom((uint8_t)MPU_ADDR, (uint8_t)14, (uint8_t)true);
+  Wire.write(0x3B);
+  if (Wire.endTransmission(false) != 0) {
+    return;
+  }
 
-  int16_t rawAx = Wire.read() << 8 | Wire.read();
-  int16_t rawAy = Wire.read() << 8 | Wire.read();
-  int16_t rawAz = Wire.read() << 8 | Wire.read();
-  Wire.read(); Wire.read(); // skip temp
-  int16_t rawGx = Wire.read() << 8 | Wire.read();
-  int16_t rawGy = Wire.read() << 8 | Wire.read();
-  int16_t rawGz = Wire.read() << 8 | Wire.read();
+  if (Wire.requestFrom((uint8_t)MPU_ADDR, (uint8_t)14, (uint8_t)true) == 14) {
+    int16_t rawAx = Wire.read() << 8 | Wire.read();
+    int16_t rawAy = Wire.read() << 8 | Wire.read();
+    int16_t rawAz = Wire.read() << 8 | Wire.read();
+    Wire.read(); Wire.read(); // skip internal temp
+    int16_t rawGx = Wire.read() << 8 | Wire.read();
+    int16_t rawGy = Wire.read() << 8 | Wire.read();
+    int16_t rawGz = Wire.read() << 8 | Wire.read();
 
-  // Convert to physical units
-  accelX = rawAx / 16384.0; // ±2g range
-  accelY = rawAy / 16384.0;
-  accelZ = rawAz / 16384.0;
-  gyroX = rawGx / 131.0;    // ±250°/s range
-  gyroY = rawGy / 131.0;
-  gyroZ = rawGz / 131.0;
+    accelX = rawAx / 16384.0;
+    accelY = rawAy / 16384.0;
+    accelZ = rawAz / 16384.0;
+    gyroX  = rawGx / 131.0;
+    gyroY  = rawGy / 131.0;
+    gyroZ  = rawGz / 131.0;
 
-  // Simple pitch/roll from accelerometer
-  pitch = atan2(accelY, sqrt(accelX * accelX + accelZ * accelZ)) * 180.0 / PI;
-  roll  = atan2(-accelX, accelZ) * 180.0 / PI;
-  // Yaw from gyro integration (approximate, drifts over time)
-  yaw += gyroZ * (SEND_INTERVAL / 1000.0);
-  if (yaw > 180) yaw -= 360;
-  if (yaw < -180) yaw += 360;
+    float denom = sqrt(accelX * accelX + accelZ * accelZ);
+    if (denom > 0.001) {
+      pitch = atan2(accelY, denom) * 180.0 / PI;
+    }
+    roll = atan2(-accelX, accelZ) * 180.0 / PI;
+    yaw += gyroZ * (SEND_INTERVAL / 1000.0);
+    if (yaw > 180.0) yaw -= 360.0;
+    if (yaw < -180.0) yaw += 360.0;
+  }
 }
 
-// ─── PRESSURE & ALTITUDE (BMP280) ───────────
+// ─── BMP280 PRESSURE & ALTITUDE ─────────────
 void readBMP280() {
   if (!bmpReady) return;
-  bmpPressure = bmp.readPressure() / 100.0F; // Pa → hPa
-  bmpAltitude = bmp.readAltitude(1013.25);    // sea level ref
+  float p = bmp.readPressure();
+  if (!isnan(p) && p > 30000.0) {
+    bmpPressure = p / 100.0F; // Pa to hPa
+    bmpAltitude = bmp.readAltitude(1013.25);
+  }
 }
 
-// ─── TEMPERATURE & HUMIDITY (DHT11) ─────────
+// ─── DHT11 TEMPERATURE & HUMIDITY ───────────
 void readDHT11() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-  if (!isnan(t)) dhtTemp = t;
-  if (!isnan(h)) dhtHumidity = h;
+  if (!isnan(t) && t >= -20.0 && t <= 80.0) dhtTemp = t;
+  if (!isnan(h) && h >= 0.0 && h <= 100.0) dhtHumidity = h;
 }
 
-// ─── AIR QUALITY (MQ-135) ───────────────────
+// ─── MQ-135 AIR QUALITY ─────────────────────
 void readMQ135() {
   airQualityRaw = analogRead(MQ135_PIN);
-  // Simple PPM approximation (calibrate for accuracy)
-  // MQ-135 analog: 0-1023 → ~10-1000 PPM range
   airQualityPPM = (float)map(airQualityRaw, 0, 1023, 10, 1000);
 }
 
-// ─── MOTION (HC-SR501 PIR) ──────────────────
+// ─── PIR MOTION & WARMUP ────────────────────
 void readPIR() {
-  motionDetected = digitalRead(PIR_PIN) == HIGH;
+  // Non-blocking warm-up check: suppress triggers for first 60 seconds
+  if (millis() < PIR_WARMUP_MS) {
+    motionDetected = false;
+  } else {
+    motionDetected = (digitalRead(PIR_PIN) == HIGH);
+  }
 }
 
-// ─── LoRa (Ra-02 SX1278) ────────────────────
+// ─── LoRa (Ra-02) ───────────────────────────
 void readLoRa() {
   if (!loraReady) return;
-  // Check for incoming packet (non-blocking)
   int packetSize = LoRa.parsePacket();
   if (packetSize) {
-    // Read and discard packet data (we just want signal info)
     while (LoRa.available()) {
       LoRa.read();
     }
     loraRSSI = LoRa.packetRssi();
     loraSNR = LoRa.packetSnr();
   }
-  // Signal strength: RSSI mapped to 0-100%
-  // RSSI range: -120 (worst) to -30 (best)
   long mappedSignal = map(loraRSSI, -120, -30, 0, 100);
   signalStrength = (float)constrain(mappedSignal, 0L, 100L);
 }
 
 // ─── SUPPLY VOLTAGE ─────────────────────────
-long readVcc() {
+long readSupplyVoltage() {
 #if defined(ARDUINO_ARCH_AVR)
-  // Read internal 1.1V reference against AVcc (Arduino Uno/Nano ATmega328P)
   ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
   delay(2);
   ADCSRA |= _BV(ADSC);
   while (bit_is_set(ADCSRA, ADSC));
   long result = ADCL;
   result |= ADCH << 8;
-  result = 1126400L / result; // Back-calculate AVcc in mV
-  return result;
-#elif defined(ESP8266)
-  // ESP8266 internal VCC reading (returns mV)
-  return ESP.getVcc();
+  return 1126400L / result;
 #elif defined(ARDUINO_ARCH_MEGAAVR)
-  // Arduino Nano Every (ATmega4809) runs at 5V
   return 5000;
 #else
-  // Default fallback for ESP32 and other 3.3V architectures
-  return 3300;
+  return 5000;
 #endif
 }
 
-// ─── SD CARD CSV LOGGING ─────────────────────
+// ─── SD CARD LOGGING ────────────────────────
 void logToSD() {
   if (!sdReady) return;
   File logFile = SD.open("trip_log.csv", FILE_WRITE);
   if (logFile) {
-    logFile.print(millis()); logFile.print(F(","));
+    logFile.print(seqNumber); logFile.print(F(","));
+    logFile.print(millis() / 1000); logFile.print(F(","));
     logFile.print(gpsLat, 6); logFile.print(F(","));
     logFile.print(gpsLng, 6); logFile.print(F(","));
     logFile.print(gpsSpeed, 1); logFile.print(F(","));
@@ -304,14 +313,21 @@ void logToSD() {
     logFile.print(roll, 1); logFile.print(F(","));
     logFile.print(yaw, 1); logFile.print(F(","));
     logFile.println(motionDetected ? 1 : 0);
+    logFile.flush();
     logFile.close();
   }
 }
 
-// ─── SEND JSON ──────────────────────────────
-void sendJSON() {
-  // Use compact JSON to minimize serial bandwidth
-  Serial.print(F("{\"lat\":"));
+// ─── SEND JSON TELEMETRY ────────────────────
+void sendTelemetryJSON() {
+  bool isCalibrating = (millis() < PIR_WARMUP_MS);
+
+  Serial.print(F("{\"seq\":"));
+  Serial.print(seqNumber);
+  Serial.print(F(",\"uptime\":"));
+  Serial.print(millis() / 1000);
+
+  Serial.print(F(",\"lat\":"));
   Serial.print(gpsLat, 6);
   Serial.print(F(",\"lng\":"));
   Serial.print(gpsLng, 6);
@@ -357,6 +373,10 @@ void sendJSON() {
   Serial.print(F(",\"motionDetected\":"));
   Serial.print(motionDetected ? F("true") : F("false"));
 
+  Serial.print(F(",\"pirStatus\":\""));
+  Serial.print(isCalibrating ? F("CALIBRATING") : F("OK"));
+  Serial.print(F("\""));
+
   Serial.print(F(",\"loraRSSI\":"));
   Serial.print(loraRSSI);
   Serial.print(F(",\"loraSNR\":"));
@@ -369,9 +389,9 @@ void sendJSON() {
 
   Serial.print(F(",\"sd\":"));
   Serial.print(sdReady ? F("true") : F("false"));
-
-  Serial.print(F(",\"uptime\":"));
-  Serial.print(millis() / 1000);
+  Serial.print(F(",\"sdStatus\":\""));
+  Serial.print(sdReady ? F("OK") : F("ERROR"));
+  Serial.print(F("\""));
 
   Serial.println(F("}"));
 }

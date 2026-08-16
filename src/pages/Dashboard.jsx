@@ -2,7 +2,6 @@ import { useState, useLayoutEffect, useRef } from 'react';
 import { Layers, Info, Compass, Zap } from 'lucide-react';
 import gsap from 'gsap';
 import { useTelemetrySocket } from '../hooks/useTelemetrySocket';
-import { useDemoTelemetry } from '../hooks/useDemoTelemetry';
 import DashboardNavbar from '../components/dashboard/DashboardNavbar';
 import StatusSidebar from '../components/dashboard/StatusSidebar';
 import MetricGauge from '../components/dashboard/MetricGauge';
@@ -12,12 +11,15 @@ import LiveMap from '../components/dashboard/LiveMap';
 import JourneySummary from '../components/dashboard/JourneySummary';
 import ConnectionModal from '../components/dashboard/ConnectionModal';
 import SensorInspector from '../components/dashboard/SensorInspector';
+import SystemDiagnostics from '../components/dashboard/SystemDiagnostics';
 import AnimatedCounter from '../components/reactbits/AnimatedCounter';
 import ClickSpark from '../components/reactbits/ClickSpark';
 import RawTelemetryTable from '../components/dashboard/RawTelemetryTable';
+import { TELEMETRY_CONFIG } from '../config/telemetryConfig';
 
 /* ─── Compass Rose ─── */
 function CompassRose({ heading = 0 }) {
+  const h = typeof heading === 'number' && Number.isFinite(heading) ? heading : 0;
   return (
     <div style={{ width: 80, height: 80, position: 'relative', flexShrink: 0 }}>
       <svg width="80" height="80" viewBox="0 0 80 80">
@@ -34,7 +36,7 @@ function CompassRose({ heading = 0 }) {
             >{d}</text>
           );
         })}
-        <g style={{ transform: `rotate(${heading}deg)`, transformOrigin: '40px 40px', transition: 'transform 0.5s ease-out' }}>
+        <g style={{ transform: `rotate(${h}deg)`, transformOrigin: '40px 40px', transition: 'transform 0.4s ease-out' }}>
           <polygon points="40,12 44,30 40,26 36,30" fill="var(--danger)" opacity="0.9" />
           <polygon points="40,68 44,50 40,54 36,50" fill="var(--text-dim)" opacity="0.4" />
         </g>
@@ -46,9 +48,9 @@ function CompassRose({ heading = 0 }) {
 
 /* ─── Orientation / IMU Cube (MPU-6050) ─── */
 function OrientationCube({ pitch = 0, roll = 0, yaw = 0 }) {
-  const p = typeof pitch === 'number' ? pitch : 0;
-  const r = typeof roll === 'number' ? roll : 0;
-  const y = typeof yaw === 'number' ? yaw : 0;
+  const p = typeof pitch === 'number' && Number.isFinite(pitch) ? pitch : 0;
+  const r = typeof roll === 'number' && Number.isFinite(roll) ? roll : 0;
+  const y = typeof yaw === 'number' && Number.isFinite(yaw) ? yaw : 0;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <div className="cube-scene">
@@ -75,9 +77,10 @@ function OrientationCube({ pitch = 0, roll = 0, yaw = 0 }) {
 
 /* ─── Speed Display (NEO-6M GPS) ─── */
 function SpeedDisplay({ speed = 0 }) {
-  const kmh = speed;
-  const ms = speed / 3.6;
-  const mph = speed * 0.621371;
+  const s = typeof speed === 'number' && Number.isFinite(speed) ? Math.max(0, speed) : 0;
+  const kmh = s;
+  const ms = s / 3.6;
+  const mph = s * 0.621371;
   return (
     <div className="widget speed-display-widget" style={{
       background: 'linear-gradient(135deg, rgba(93,173,226,0.08), rgba(52,211,153,0.05))',
@@ -86,7 +89,7 @@ function SpeedDisplay({ speed = 0 }) {
         <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Speed <span style={{ fontSize: '0.55rem', color: 'var(--text-dim)' }}>NEO-6M</span></div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '2.2rem', fontWeight: 800, color: 'var(--primary)' }}>
-            <AnimatedCounter value={ms} decimals={1} duration={500} />
+            <AnimatedCounter value={ms} decimals={1} duration={400} />
           </span>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>m/s</span>
           <Zap size={16} color="var(--accent-orange)" style={{ marginLeft: 8 }} />
@@ -96,13 +99,13 @@ function SpeedDisplay({ speed = 0 }) {
       <div className="speed-display-units">
         <div style={{ textAlign: 'center' }}>
           <div className="mono" style={{ fontSize: '1rem', fontWeight: 700 }}>
-            <AnimatedCounter value={kmh} decimals={1} duration={500} />
+            <AnimatedCounter value={kmh} decimals={1} duration={400} />
           </div>
           <div style={{ fontSize: '0.6rem', color: 'var(--text-dim)', fontWeight: 600 }}>km/h</div>
         </div>
         <div style={{ textAlign: 'center' }}>
           <div className="mono" style={{ fontSize: '1rem', fontWeight: 700 }}>
-            <AnimatedCounter value={mph} decimals={1} duration={500} />
+            <AnimatedCounter value={mph} decimals={1} duration={400} />
           </div>
           <div style={{ fontSize: '0.6rem', color: 'var(--text-dim)', fontWeight: 600 }}>mph</div>
         </div>
@@ -111,11 +114,11 @@ function SpeedDisplay({ speed = 0 }) {
       <div className="speed-display-bar">
         <div style={{ height: 6, background: 'var(--panel)', borderRadius: 3, overflow: 'hidden' }}>
           <div style={{
-            width: `${Math.min(100, (speed / 80) * 100)}%`,
+            width: `${Math.min(100, (s / 80) * 100)}%`,
             height: '100%',
-            background: speed > 60 ? 'var(--danger)' : speed > 40 ? 'var(--accent-orange)' : 'linear-gradient(90deg, var(--primary), var(--accent-green))',
+            background: s > 60 ? 'var(--danger)' : s > 40 ? 'var(--accent-orange)' : 'linear-gradient(90deg, var(--primary), var(--accent-green))',
             borderRadius: 3,
-            transition: 'width 0.5s ease-out',
+            transition: 'width 0.4s ease-out',
           }} />
         </div>
       </div>
@@ -123,16 +126,16 @@ function SpeedDisplay({ speed = 0 }) {
   );
 }
 
-/* ─── Right Status Panel ─── */
-function StatusPanel({ data, history }) {
-  const supplyPct = data ? Math.min(100, Math.max(0, ((data.batteryVoltage - 3.0) / 2.2) * 100)) : 0;
-  const supplyColor = supplyPct < 20 ? 'var(--danger)' : supplyPct < 50 ? 'var(--accent-orange)' : 'var(--accent-green)';
+/* ─── Right Status Panel (Desktop) ─── */
+function StatusPanel({ data, history, routeHistory }) {
+  const supplyPct = data?.batteryVoltage ? Math.min(100, Math.max(0, ((data.batteryVoltage - 3.0) / 2.2) * 100)) : 0;
+  const supplyColor = !data?.batteryVoltage ? 'var(--text-muted)' : supplyPct < 20 ? 'var(--danger)' : supplyPct < 50 ? 'var(--accent-orange)' : 'var(--accent-green)';
 
   return (
     <div className="dashboard-panel" style={{ gap: 10, padding: 10 }}>
-      {/* Map */}
+      {/* Live Map */}
       <div style={{ flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column' }}>
-        <LiveMap data={data} history={history} />
+        <LiveMap data={data} history={history} routeHistory={routeHistory} />
       </div>
 
       {/* 3D Gyroscope (MPU-6050) */}
@@ -145,17 +148,17 @@ function StatusPanel({ data, history }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         <div className="env-card" style={{ padding: '8px 10px' }}>
           <div className="env-card-info">
-            <div className="env-card-label">LAT</div>
+            <div className="env-card-label">LATITUDE</div>
             <div className="mono" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-              {data?.lat?.toFixed(4) || '0.0000'}
+              {data?.lat && typeof data.lat === 'number' && Math.abs(data.lat) > 0.0001 ? data.lat.toFixed(4) : 'Acquiring'}
             </div>
           </div>
         </div>
         <div className="env-card" style={{ padding: '8px 10px' }}>
           <div className="env-card-info">
-            <div className="env-card-label">LNG</div>
+            <div className="env-card-label">LONGITUDE</div>
             <div className="mono" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-              {data?.lng?.toFixed(4) || '0.0000'}
+              {data?.lng && typeof data.lng === 'number' && Math.abs(data.lng) > 0.0001 ? data.lng.toFixed(4) : 'Acquiring'}
             </div>
           </div>
         </div>
@@ -167,36 +170,36 @@ function StatusPanel({ data, history }) {
           <div className="env-card-info">
             <div className="env-card-label">Speed</div>
             <div className="mono" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-              {data?.speed?.toFixed(1) || '0.0'} <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>km/h</span>
+              {data?.speed ? data.speed.toFixed(1) : '0.0'} <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>km/h</span>
             </div>
           </div>
         </div>
         <div className="env-card" style={{ padding: '8px 10px' }}>
           <div className="env-card-info">
             <div className="env-card-label">Satellites</div>
-            <div className="mono" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-              {data?.satellites || 0}
+            <div className="mono" style={{ fontSize: '0.85rem', fontWeight: 700, color: (data?.satellites || 0) >= 4 ? 'var(--accent-green)' : 'var(--accent-orange)' }}>
+              {data?.satellites || 0} locked
             </div>
           </div>
         </div>
       </div>
 
-      {/* Status Badges */}
+      {/* Hardware Status Badges */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {/* PIR motion badge */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
           borderRadius: 'var(--radius-full)',
-          background: data?.motionDetected ? 'var(--danger-glow)' : 'var(--accent-green-glow)',
-          border: `1px solid ${data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)'}`,
+          background: data?.pirStatus === 'CALIBRATING' ? 'rgba(245,158,11,0.1)' : data?.motionDetected ? 'var(--danger-glow)' : 'var(--accent-green-glow)',
+          border: `1px solid ${data?.pirStatus === 'CALIBRATING' ? 'var(--accent-orange)' : data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)'}`,
         }}>
           <div style={{
             width: 8, height: 8, borderRadius: '50%',
-            background: data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)',
+            background: data?.pirStatus === 'CALIBRATING' ? 'var(--accent-orange)' : data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)',
             animation: data?.motionDetected ? 'pulse 1s infinite' : 'none',
           }} />
-          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)' }}>
-            PIR: {data?.motionDetected ? 'Motion!' : 'Clear'}
+          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: data?.pirStatus === 'CALIBRATING' ? 'var(--accent-orange)' : data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)' }}>
+            PIR: {data?.pirStatus === 'CALIBRATING' ? 'Warm-up' : data?.motionDetected ? 'Motion!' : 'Clear'}
           </span>
         </div>
 
@@ -209,11 +212,11 @@ function StatusPanel({ data, history }) {
         }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: supplyColor }} />
           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: supplyColor }}>
-            PWR: {data?.batteryVoltage?.toFixed(1) || '0.0'}V
+            PWR: {data?.batteryVoltage ? `${data.batteryVoltage.toFixed(1)}V` : '5.0V'}
           </span>
         </div>
 
-        {/* System connection badge */}
+        {/* LoRa connection badge */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
           borderRadius: 'var(--radius-full)',
@@ -228,7 +231,7 @@ function StatusPanel({ data, history }) {
             fontSize: '0.72rem', fontWeight: 700,
             color: data ? 'var(--accent-green)' : 'var(--danger)',
           }}>
-            {data ? 'LoRa Connected' : 'Disconnected'}
+            {data ? 'LoRa Active' : 'Disconnected'}
           </span>
         </div>
       </div>
@@ -237,36 +240,36 @@ function StatusPanel({ data, history }) {
 }
 
 /* ─── Main Dashboard Content ─── */
-function DashboardContent({ telemetry, isExpanded, onToggle }) {
-  const { data, history, alerts, dismissAlert } = telemetry;
+function DashboardContent({ telemetry, isExpanded, onToggle, wsUrl }) {
+  const { data, history, routeHistory, stats, connectionState, displayStatus } = telemetry;
   const [showSummary, setShowSummary] = useState(false);
-  const [mobileTab, setMobileTab] = useState('all'); // 'all', 'gauges', 'map', 'inspector', 'logs'
+  const [mobileTab, setMobileTab] = useState('all'); // 'all', 'gauges', 'map', 'inspector', 'diagnostics', 'logs'
   const mainRef = useRef(null);
 
   useLayoutEffect(() => {
     if (mainRef.current) {
       const widgets = mainRef.current.querySelectorAll('.widget');
       gsap.fromTo(widgets,
-        { opacity: 0, y: 30, scale: 0.95 },
-        { opacity: 1, y: 0, scale: 1, stagger: 0.08, duration: 0.8, ease: 'power3.out', delay: 0.2 }
+        { opacity: 0, y: 20, scale: 0.98 },
+        { opacity: 1, y: 0, scale: 1, stagger: 0.05, duration: 0.5, ease: 'power2.out' }
       );
     }
   }, [mobileTab]);
 
   return (
     <>
-      {/* Left sidebar — detailed metrics */}
+      {/* Left sidebar — detailed status indicators */}
       <StatusSidebar data={data} isExpanded={isExpanded} onToggle={onToggle} />
 
       {/* Main content area */}
       <div className="dashboard-main" ref={mainRef} style={{ gap: 10, padding: 10 }}>
-        {/* Mobile View Switcher (Only visible on screens <= 1024px) */}
+        {/* Mobile View Switcher */}
         <div className="dashboard-mobile-tabs">
           <button 
             className={`mobile-tab-btn ${mobileTab === 'all' ? 'active' : ''}`}
             onClick={() => setMobileTab('all')}
           >
-            📊 All
+            📊 Overview
           </button>
           <button 
             className={`mobile-tab-btn ${mobileTab === 'gauges' ? 'active' : ''}`}
@@ -287,12 +290,29 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
             🔍 Sensors
           </button>
           <button 
+            className={`mobile-tab-btn ${mobileTab === 'diagnostics' ? 'active' : ''}`}
+            onClick={() => setMobileTab('diagnostics')}
+          >
+            🩺 Health
+          </button>
+          <button 
             className={`mobile-tab-btn ${mobileTab === 'logs' ? 'active' : ''}`}
             onClick={() => setMobileTab('logs')}
           >
             📈 Logs
           </button>
         </div>
+
+        {/* Section: SYSTEM HEALTH / DIAGNOSTICS */}
+        {(mobileTab === 'all' || mobileTab === 'diagnostics') && (
+          <SystemDiagnostics
+            stats={stats}
+            data={data}
+            connectionState={connectionState}
+            displayStatus={displayStatus}
+            wsUrl={wsUrl}
+          />
+        )}
 
         {/* Section: GAUGES & SPEED */}
         {(mobileTab === 'all' || mobileTab === 'gauges') && (
@@ -311,7 +331,7 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
               </div>
             </div>
 
-            {/* 2x2 Gauge Grid — actual sensors */}
+            {/* 2x2 Gauge Grid */}
             <div className="dashboard-gauge-grid">
               <div className="widget gauge-card">
                 <div className="gauge-card-label">Temperature <span>DHT11</span></div>
@@ -352,16 +372,16 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
           <div className="mobile-only-status-section" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Live GPS Map */}
             <div style={{ height: 230, width: '100%' }}>
-              <LiveMap data={data} history={history} />
+              <LiveMap data={data} history={history} routeHistory={routeHistory} />
             </div>
 
-            {/* GPS Telemetry Strip — immediately fills below the map */}
+            {/* GPS Telemetry Strip */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
               <div className="env-card" style={{ padding: '8px 10px' }}>
                 <div className="env-card-info">
                   <div className="env-card-label">GPS FIX</div>
-                  <div className="mono" style={{ fontSize: '0.78rem', fontWeight: 700 }}>
-                    {data && (data.lat !== 0 || data.lng !== 0) ? `${data.lat?.toFixed(3)}, ${data.lng?.toFixed(3)}` : 'Acquiring'}
+                  <div className="mono" style={{ fontSize: '0.78rem', fontWeight: 700, color: data?.isGpsFixed ? 'var(--accent-green)' : 'var(--accent-orange)' }}>
+                    {data?.isGpsFixed ? `${data.lat?.toFixed(3)}, ${data.lng?.toFixed(3)}` : 'Searching'}
                   </div>
                 </div>
               </div>
@@ -387,35 +407,6 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
             <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '14px', overflow: 'visible' }}>
               <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.1em', alignSelf: 'flex-start' }}>MPU-6050 GYRO</div>
               <OrientationCube pitch={data?.pitch} roll={data?.roll} yaw={data?.yaw} />
-            </div>
-
-            {/* Mobile Status Badges */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                borderRadius: 'var(--radius-full)',
-                background: data?.motionDetected ? 'var(--danger-glow)' : 'var(--accent-green-glow)',
-                border: `1px solid ${data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)'}`,
-              }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)',
-                }} />
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)' }}>
-                  PIR: {data?.motionDetected ? 'Motion Detected' : 'Motion Clear'}
-                </span>
-              </div>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                borderRadius: 'var(--radius-full)',
-                background: data ? 'var(--accent-green-glow)' : 'var(--danger-glow)',
-                border: `1px solid ${data ? 'var(--accent-green)' : 'var(--danger)'}`,
-              }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: data ? 'var(--accent-green)' : 'var(--danger)' }} />
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: data ? 'var(--accent-green)' : 'var(--danger)' }}>
-                  {data ? `PWR: ${data?.batteryVoltage?.toFixed(1) || '5.0'}V` : 'Disconnected'}
-                </span>
-              </div>
             </div>
           </div>
         )}
@@ -446,7 +437,7 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
       </div>
 
       {/* Right Panel: Map + Status (Desktop Only) */}
-      <StatusPanel data={data} history={history} />
+      <StatusPanel data={data} history={history} routeHistory={routeHistory} />
 
       {showSummary && (
         <JourneySummary data={data} history={history} onClose={() => setShowSummary(false)} />
@@ -458,7 +449,7 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
 /* ─── Main Export ─── */
 export default function Dashboard() {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [wsUrl, setWsUrl] = useState(() => localStorage.getItem('lollyd_ws_url') || 'wss://lollyd-relay.onrender.com');
+  const [wsUrl, setWsUrl] = useState(() => localStorage.getItem('lollyd_ws_url') || TELEMETRY_CONFIG.DEFAULT_WS_URL);
   const [fieldMap, setFieldMap] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lollyd_field_map') || '{}'); } catch { return {}; }
   });
@@ -484,7 +475,8 @@ export default function Dashboard() {
       <DashboardNavbar
         connected={telemetry.connected}
         connectionState={telemetry.connectionState}
-        messageCount={telemetry.messageCount}
+        displayStatus={telemetry.displayStatus}
+        stats={telemetry.stats}
         onDisconnect={handleDisconnect}
         data={telemetry.data}
       />
@@ -493,21 +485,10 @@ export default function Dashboard() {
         telemetry={telemetry}
         isExpanded={sidebarExpanded}
         onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+        wsUrl={wsUrl}
       />
 
-      {!telemetry.connected && (telemetry.connectionState === 'connecting' || telemetry.connectionState === 'reconnecting') && (
-        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 60px)' }}>
-          <div className="route-loading" style={{ background: 'transparent' }}>
-            <div className="route-loading-spinner" />
-            <div className="route-loading-text">
-              {telemetry.connectionState === 'reconnecting' ? 'Reconnecting to hardware stream...' : 'Connecting to Live Telemetry Relay...'}
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)', marginTop: 8 }}>{wsUrl}</p>
-          </div>
-        </div>
-      )}
-
-      {(!telemetry.connected && telemetry.connectionState !== 'connecting' && telemetry.connectionState !== 'reconnecting') || showConfigModal ? (
+      {showConfigModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(7, 16, 24, 0.85)', backdropFilter: 'blur(16px)' }}>
           <ConnectionModal
             onConnect={handleConnect}
@@ -519,7 +500,7 @@ export default function Dashboard() {
             currentUrl={wsUrl}
           />
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
