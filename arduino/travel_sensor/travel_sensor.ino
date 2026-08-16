@@ -33,6 +33,7 @@
 #include <Adafruit_BMP280.h>
 #include <SPI.h>
 #include <LoRa.h>
+#include <SD.h>
 
 // ─── PIN CONFIGURATION ──────────────────────
 #define GPS_RX_PIN    4    // GPS TX → Arduino D4
@@ -41,6 +42,7 @@
 #define DHT_TYPE      DHT11
 #define MQ135_PIN     A0   // MQ-135 analog output
 #define PIR_PIN       5    // HC-SR501 output
+#define SD_CS_PIN     6    // MicroSD Card CS pin (D6)
 #define LORA_CS_PIN   10   // Ra-02 NSS
 #define LORA_RST_PIN  9    // Ra-02 RST
 #define LORA_DIO0_PIN 8    // Ra-02 DIO0
@@ -76,6 +78,7 @@ float supplyVoltage = 0;
 
 bool bmpReady = false;
 bool loraReady = false;
+bool sdReady = false;
 
 void setup() {
   Serial.begin(9600);
@@ -115,6 +118,22 @@ void setup() {
     Serial.println(F("{\"error\":\"LoRa Ra-02 init failed\"}"));
   }
 
+  // ── Init MicroSD Card (FAT32) ──
+  if (SD.begin(SD_CS_PIN)) {
+    sdReady = true;
+    // Create / append header if file is empty
+    File logFile = SD.open("trip_log.csv", FILE_WRITE);
+    if (logFile) {
+      if (logFile.size() == 0) {
+        logFile.println(F("timestamp_ms,lat,lng,speed,sats,alt,temp,humidity,pressure,aqi,pitch,roll,yaw,motion"));
+      }
+      logFile.close();
+    }
+    Serial.println(F("{\"info\":\"MicroSD Card 16GB ready (logging to trip_log.csv)\"}"));
+  } else {
+    Serial.println(F("{\"warn\":\"MicroSD Card not detected on pin D6\"}"));
+  }
+
   // ── Read supply voltage ──
   // Using internal 1.1V reference to measure Vcc
   // This is an approximation
@@ -143,6 +162,7 @@ void loop() {
     readLoRa();
     supplyVoltage = readVcc() / 1000.0;
 
+    logToSD();
     sendJSON();
   }
 }
@@ -265,6 +285,29 @@ long readVcc() {
 #endif
 }
 
+// ─── SD CARD CSV LOGGING ─────────────────────
+void logToSD() {
+  if (!sdReady) return;
+  File logFile = SD.open("trip_log.csv", FILE_WRITE);
+  if (logFile) {
+    logFile.print(millis()); logFile.print(F(","));
+    logFile.print(gpsLat, 6); logFile.print(F(","));
+    logFile.print(gpsLng, 6); logFile.print(F(","));
+    logFile.print(gpsSpeed, 1); logFile.print(F(","));
+    logFile.print(gpsSatellites); logFile.print(F(","));
+    logFile.print(bmpAltitude, 1); logFile.print(F(","));
+    logFile.print(dhtTemp, 1); logFile.print(F(","));
+    logFile.print(dhtHumidity, 1); logFile.print(F(","));
+    logFile.print(bmpPressure, 1); logFile.print(F(","));
+    logFile.print(airQualityPPM, 0); logFile.print(F(","));
+    logFile.print(pitch, 1); logFile.print(F(","));
+    logFile.print(roll, 1); logFile.print(F(","));
+    logFile.print(yaw, 1); logFile.print(F(","));
+    logFile.println(motionDetected ? 1 : 0);
+    logFile.close();
+  }
+}
+
 // ─── SEND JSON ──────────────────────────────
 void sendJSON() {
   // Use compact JSON to minimize serial bandwidth
@@ -323,6 +366,9 @@ void sendJSON() {
 
   Serial.print(F(",\"batteryVoltage\":"));
   Serial.print(supplyVoltage, 2);
+
+  Serial.print(F(",\"sd\":"));
+  Serial.print(sdReady ? F("true") : F("false"));
 
   Serial.println(F("}"));
 }
