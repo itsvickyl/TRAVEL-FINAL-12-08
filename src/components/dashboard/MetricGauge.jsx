@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 /**
  * Premium 270° Aerospace Instrument Gauge
  * ========================================
- * High-visibility graduation numbers positioned along the outer perimeter of the meter.
+ * High-visibility graduation numbers with smart anti-collision positioning.
  * Arc sweeps from 225° (bottom-left) over the top to 495° (bottom-right).
  */
 export default function MetricGauge({
@@ -13,7 +13,7 @@ export default function MetricGauge({
   label = '',
   unit = '',
   size = 200,
-  thresholds, // [green, yellow, orange, red] boundaries, e.g. [20, 35, 42, 50]
+  thresholds, // Array of threshold values
 }) {
   const isValueValid = typeof value === 'number' && Number.isFinite(value);
   const numericVal = isValueValid ? value : min;
@@ -41,14 +41,31 @@ export default function MetricGauge({
       return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
     };
 
-    // Threshold segments
-    const segments = thresholds || [
+    // Threshold segments (ensure max is always the last bound)
+    const rawSegments = thresholds || [
       min + (max - min) * 0.25,
       min + (max - min) * 0.5,
       min + (max - min) * 0.75,
       max,
     ];
-    const colors = ['#34d399', '#f59e0b', '#f97316', '#ef4444'];
+
+    // Ensure segments are strictly sorted and unique
+    const uniqueSegments = Array.from(new Set(rawSegments)).sort((a, b) => a - b);
+    if (uniqueSegments[uniqueSegments.length - 1] !== max) {
+      uniqueSegments.push(max);
+    }
+    const segments = uniqueSegments;
+
+    // Rich color palette adaptive to any number of segments
+    const palettePool = ['#34d399', '#38bdf8', '#f59e0b', '#f97316', '#ef4444', '#dc2626'];
+    const colors = segments.map((_, idx) => {
+      if (segments.length <= 4) {
+        const standard4 = ['#34d399', '#f59e0b', '#f97316', '#ef4444'];
+        return standard4[idx] || '#ef4444';
+      }
+      return palettePool[Math.min(idx, palettePool.length - 1)];
+    });
+
     const bgArcsArr = [];
     let prevBound = min;
 
@@ -58,7 +75,7 @@ export default function MetricGauge({
       const a1 = startAngle + totalAngle * segStart;
       const a2 = startAngle + totalAngle * segEnd;
 
-      const gap = 3;
+      const gap = 2.5;
       const p1 = i === 0 ? a1 : a1 + gap;
       const p2 = i === segments.length - 1 ? a2 : a2 - gap;
 
@@ -71,16 +88,18 @@ export default function MetricGauge({
       prevBound = segments[i];
     }
 
-    // Active color based on current value
-    const actColor = !isValueValid
-      ? 'var(--text-dim)'
-      : numericVal >= segments[2]
-      ? '#ef4444'
-      : numericVal >= segments[1]
-      ? '#f97316'
-      : numericVal >= segments[0]
-      ? '#f59e0b'
-      : '#34d399';
+    // Determine active color based on current value
+    let actColor = colors[0];
+    if (!isValueValid) {
+      actColor = 'var(--text-dim)';
+    } else {
+      for (let i = segments.length - 1; i >= 0; i--) {
+        if (i === 0 || numericVal >= segments[i - 1]) {
+          actColor = colors[i];
+          break;
+        }
+      }
+    }
 
     // Needle rotation angle (degrees from positive X-axis)
     const pct = Math.max(0, Math.min(1, (numericVal - min) / (max - min)));
@@ -88,25 +107,60 @@ export default function MetricGauge({
     const nAngle = curAngle - 90;
 
     // Distinct visible numbers positioned OUTSIDE the meter arc
-    const tickValues = [
+    const rawTickValues = [
       { val: min, color: 'var(--text-secondary)' },
       ...segments.map((val, idx) => ({ val, color: colors[idx] || 'var(--text-secondary)' })),
     ];
 
-    const ticksArr = tickValues.map(({ val, color }) => {
-      const vPct = Math.max(0, Math.min(1, (val - min) / (max - min)));
+    // Remove duplicates
+    const seenVals = new Set();
+    const tickValues = [];
+    for (const t of rawTickValues) {
+      if (!seenVals.has(t.val)) {
+        seenVals.add(t.val);
+        tickValues.push(t);
+      }
+    }
+
+    // Compute tick positions with Smart Anti-Collision separation
+    const ticksArr = tickValues.map((t, idx) => {
+      const vPct = Math.max(0, Math.min(1, (t.val - min) / (max - min)));
       const angle = startAngle + totalAngle * vPct;
       const rad = ((angle - 90) * Math.PI) / 180;
+
+      // Check proximity to previous or next tick to prevent overlap (e.g. -20 and 0)
+      const prevTick = idx > 0 ? tickValues[idx - 1] : null;
+      const nextTick = idx < tickValues.length - 1 ? tickValues[idx + 1] : null;
+
+      const prevAngleDiff = prevTick ? (vPct - (prevTick.val - min) / (max - min)) * totalAngle : 999;
+      const nextAngleDiff = nextTick ? ((nextTick.val - min) / (max - min) - vPct) * totalAngle : 999;
+
+      let radiusOffset = 17;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      // Anti-collision offset for closely packed numbers (like -20 and 0)
+      if (nextAngleDiff < 18) {
+        // First of the colliding pair: push down/left
+        radiusOffset = 22;
+        offsetX = -6;
+        offsetY = 7;
+      } else if (prevAngleDiff < 18) {
+        // Second of the colliding pair: push up/right
+        radiusOffset = 18;
+        offsetX = 6;
+        offsetY = -5;
+      }
+
       return {
         x1: cx + (r + 2) * Math.cos(rad),
         y1: cy + (r + 2) * Math.sin(rad),
         x2: cx + (r + 7) * Math.cos(rad),
         y2: cy + (r + 7) * Math.sin(rad),
-        // Positioned outside the colored arc with clear margin
-        lx: cx + (r + 17) * Math.cos(rad),
-        ly: cy + (r + 17) * Math.sin(rad),
-        label: Math.round(val),
-        color: color,
+        lx: cx + (r + radiusOffset) * Math.cos(rad) + offsetX,
+        ly: cy + (r + radiusOffset) * Math.sin(rad) + offsetY,
+        label: Math.round(t.val),
+        color: t.color,
       };
     });
 
@@ -122,11 +176,11 @@ export default function MetricGauge({
   const cx = size / 2;
   const cy = size * 0.48;
   const needleLength = size * 0.32 - 10;
-  const svgHeight = size * 0.82;
+  const svgHeight = size * 0.84;
 
   return (
     <div className="gauge-container" style={{ width: '100%', maxWidth: size, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* SVG 270° Arch Gauge with Perimeter Graduation Numbers */}
+      {/* SVG 270° Arch Gauge with Non-Overlapping Perimeter Graduation Numbers */}
       <svg
         width="100%"
         height="auto"
@@ -156,7 +210,7 @@ export default function MetricGauge({
               y1={t.y1}
               x2={t.x2}
               y2={t.y2}
-              stroke="rgba(255, 255, 255, 0.4)"
+              stroke="rgba(255, 255, 255, 0.45)"
               strokeWidth="1.5"
               strokeLinecap="round"
             />
@@ -167,11 +221,11 @@ export default function MetricGauge({
               textAnchor="middle"
               dominantBaseline="central"
               fill={t.color}
-              fontSize="10.5"
+              fontSize="10"
               fontFamily="var(--font-mono)"
               fontWeight="800"
               style={{
-                textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                textShadow: '0 1px 4px rgba(0,0,0,0.9)',
                 letterSpacing: '-0.02em',
               }}
             >

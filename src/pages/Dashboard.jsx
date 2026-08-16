@@ -265,37 +265,37 @@ function DashboardContent({ telemetry, isExpanded, onToggle, wsUrl }) {
       <div className="dashboard-main" ref={mainRef} style={{ gap: 10, padding: 10 }}>
         {/* Mobile View Switcher */}
         <div className="dashboard-mobile-tabs">
-          <button 
+          <button
             className={`mobile-tab-btn ${mobileTab === 'all' ? 'active' : ''}`}
             onClick={() => setMobileTab('all')}
           >
             📊 Overview
           </button>
-          <button 
+          <button
             className={`mobile-tab-btn ${mobileTab === 'gauges' ? 'active' : ''}`}
             onClick={() => setMobileTab('gauges')}
           >
             ⚡ Gauges
           </button>
-          <button 
+          <button
             className={`mobile-tab-btn ${mobileTab === 'map' ? 'active' : ''}`}
             onClick={() => setMobileTab('map')}
           >
             🗺️ Map & IMU
           </button>
-          <button 
+          <button
             className={`mobile-tab-btn ${mobileTab === 'inspector' ? 'active' : ''}`}
             onClick={() => setMobileTab('inspector')}
           >
             🔍 Sensors
           </button>
-          <button 
+          <button
             className={`mobile-tab-btn ${mobileTab === 'diagnostics' ? 'active' : ''}`}
             onClick={() => setMobileTab('diagnostics')}
           >
             🩺 Health
           </button>
-          <button 
+          <button
             className={`mobile-tab-btn ${mobileTab === 'logs' ? 'active' : ''}`}
             onClick={() => setMobileTab('logs')}
           >
@@ -336,7 +336,7 @@ function DashboardContent({ telemetry, isExpanded, onToggle, wsUrl }) {
               <div className="widget gauge-card">
                 <div className="gauge-card-label">Temperature <span>DHT11</span></div>
                 <div className="gauge-card-content">
-                  <MetricGauge value={data?.temperature ?? 0} min={-20} max={1000} label="" unit="°C" size={200} thresholds={[0, 250, 500, 1000]} />
+                  <MetricGauge value={data?.temperature ?? 0} min={-20} max={1000} label="" unit="°C" size={200} thresholds={[0, 250, 500, 750, 1000]} />
                 </div>
               </div>
 
