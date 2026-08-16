@@ -39,6 +39,14 @@ export default function RawTelemetryTable({ data }) {
               let displayVal;
               if (item.key === 'motionDetected') {
                 displayVal = val ? '🔴 YES' : '⚪ NO';
+              } else if (item.key === 'uptime') {
+                if (typeof val === 'number' && val > 0) {
+                  const m = Math.floor(val / 60);
+                  const s = Math.floor(val % 60);
+                  displayVal = m > 0 ? `${m}m ${s}s` : `${s}s`;
+                } else {
+                  displayVal = data?.timestamp ? 'Connected' : '—';
+                }
               } else {
                 displayVal = typeof val === 'number' ? val.toFixed(item.key === 'lat' || item.key === 'lng' ? 4 : 1) : '—';
               }
