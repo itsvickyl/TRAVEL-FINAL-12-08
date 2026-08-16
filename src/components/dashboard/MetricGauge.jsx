@@ -3,7 +3,8 @@ import { useMemo } from 'react';
 /**
  * Premium 270° Aerospace Instrument Gauge
  * ========================================
- * High-visibility graduation numbers with smart anti-collision positioning.
+ * High-visibility graduation numbers with piecewise scale interpolation
+ * ensuring balanced spacing and clear separation across all ranges.
  * Arc sweeps from 225° (bottom-left) over the top to 495° (bottom-right).
  */
 export default function MetricGauge({
@@ -56,8 +57,26 @@ export default function MetricGauge({
     }
     const segments = uniqueSegments;
 
+    // Ordered scale checkpoints along the gauge
+    const scalePoints = [min, ...segments];
+
+    // Piecewise scale mapper gives every threshold section its fair visual slice
+    const valToProgress = (v) => {
+      if (v <= scalePoints[0]) return 0;
+      if (v >= scalePoints[scalePoints.length - 1]) return 1;
+      for (let i = 0; i < scalePoints.length - 1; i++) {
+        const p1 = scalePoints[i];
+        const p2 = scalePoints[i + 1];
+        if (v >= p1 && v <= p2) {
+          const segFraction = p2 === p1 ? 0 : (v - p1) / (p2 - p1);
+          return (i + segFraction) / (scalePoints.length - 1);
+        }
+      }
+      return 0;
+    };
+
     // Rich color palette adaptive to any number of segments
-    const palettePool = ['#34d399', '#38bdf8', '#f59e0b', '#f97316', '#ef4444', '#dc2626'];
+    const palettePool = ['#38bdf8', '#34d399', '#f59e0b', '#f97316', '#ef4444', '#dc2626'];
     const colors = segments.map((_, idx) => {
       if (segments.length <= 4) {
         const standard4 = ['#34d399', '#f59e0b', '#f97316', '#ef4444'];
@@ -67,11 +86,10 @@ export default function MetricGauge({
     });
 
     const bgArcsArr = [];
-    let prevBound = min;
 
     for (let i = 0; i < segments.length; i++) {
-      const segStart = Math.max(0, Math.min(1, (prevBound - min) / (max - min)));
-      const segEnd = Math.max(0, Math.min(1, (segments[i] - min) / (max - min)));
+      const segStart = i / segments.length;
+      const segEnd = (i + 1) / segments.length;
       const a1 = startAngle + totalAngle * segStart;
       const a2 = startAngle + totalAngle * segEnd;
 
@@ -85,7 +103,6 @@ export default function MetricGauge({
           color: colors[i],
         });
       }
-      prevBound = segments[i];
     }
 
     // Determine active color based on current value
@@ -101,64 +118,30 @@ export default function MetricGauge({
       }
     }
 
-    // Needle rotation angle (degrees from positive X-axis)
-    const pct = Math.max(0, Math.min(1, (numericVal - min) / (max - min)));
+    // Needle rotation angle computed via piecewise progress
+    const pct = valToProgress(numericVal);
     const curAngle = startAngle + totalAngle * pct;
     const nAngle = curAngle - 90;
 
-    // Distinct visible numbers positioned OUTSIDE the meter arc
-    const rawTickValues = [
+    // Distinct visible numbers positioned evenly along the outer perimeter
+    const tickValues = [
       { val: min, color: 'var(--text-secondary)' },
       ...segments.map((val, idx) => ({ val, color: colors[idx] || 'var(--text-secondary)' })),
     ];
 
-    // Remove duplicates
-    const seenVals = new Set();
-    const tickValues = [];
-    for (const t of rawTickValues) {
-      if (!seenVals.has(t.val)) {
-        seenVals.add(t.val);
-        tickValues.push(t);
-      }
-    }
-
-    // Compute tick positions with Smart Anti-Collision separation
+    // Compute tick positions with clear outer spacing
     const ticksArr = tickValues.map((t, idx) => {
-      const vPct = Math.max(0, Math.min(1, (t.val - min) / (max - min)));
+      const vPct = idx / (tickValues.length - 1);
       const angle = startAngle + totalAngle * vPct;
       const rad = ((angle - 90) * Math.PI) / 180;
-
-      // Check proximity to previous or next tick to prevent overlap (e.g. -20 and 0)
-      const prevTick = idx > 0 ? tickValues[idx - 1] : null;
-      const nextTick = idx < tickValues.length - 1 ? tickValues[idx + 1] : null;
-
-      const prevAngleDiff = prevTick ? (vPct - (prevTick.val - min) / (max - min)) * totalAngle : 999;
-      const nextAngleDiff = nextTick ? ((nextTick.val - min) / (max - min) - vPct) * totalAngle : 999;
-
-      let radiusOffset = 17;
-      let offsetX = 0;
-      let offsetY = 0;
-
-      // Anti-collision offset for closely packed numbers (like -20 and 0)
-      if (nextAngleDiff < 18) {
-        // First of the colliding pair: push down/left
-        radiusOffset = 22;
-        offsetX = -6;
-        offsetY = 7;
-      } else if (prevAngleDiff < 18) {
-        // Second of the colliding pair: push up/right
-        radiusOffset = 18;
-        offsetX = 6;
-        offsetY = -5;
-      }
 
       return {
         x1: cx + (r + 2) * Math.cos(rad),
         y1: cy + (r + 2) * Math.sin(rad),
         x2: cx + (r + 7) * Math.cos(rad),
         y2: cy + (r + 7) * Math.sin(rad),
-        lx: cx + (r + radiusOffset) * Math.cos(rad) + offsetX,
-        ly: cy + (r + radiusOffset) * Math.sin(rad) + offsetY,
+        lx: cx + (r + 18) * Math.cos(rad),
+        ly: cy + (r + 18) * Math.sin(rad),
         label: Math.round(t.val),
         color: t.color,
       };
@@ -180,7 +163,7 @@ export default function MetricGauge({
 
   return (
     <div className="gauge-container" style={{ width: '100%', maxWidth: size, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* SVG 270° Arch Gauge with Non-Overlapping Perimeter Graduation Numbers */}
+      {/* SVG 270° Arch Gauge with Evenly Spaced Perimeter Graduation Numbers */}
       <svg
         width="100%"
         height="auto"
