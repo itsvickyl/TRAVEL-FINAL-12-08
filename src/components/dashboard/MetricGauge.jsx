@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 
 /**
- * Large colored-arc instrument gauge (like the reference design).
- * Arc segments: green → yellow → orange → red
+ * Premium 270° instrument gauge with colored threshold arcs.
+ * Arc sweeps from 225° (bottom-left) over the top to 495° / 135° (bottom-right).
+ * Range indicators are placed cleanly above the meter.
  */
 export default function MetricGauge({
   value = 0,
@@ -10,100 +11,124 @@ export default function MetricGauge({
   max = 100,
   label = '',
   unit = '',
-  size = 180,
+  size = 200,
   showLegend = true,
-  thresholds, // [green, yellow, orange, red] boundaries, e.g. [25, 50, 75, 100]
+  thresholds, // [green, yellow, orange, red] boundaries, e.g. [20, 35, 42, 50]
 }) {
-  const { bgArcs, valueArc, needleAngle, ticks } = useMemo(() => {
+  const { bgArcs, needleAngle, ticks, segs, activeColor } = useMemo(() => {
     const cx = size / 2;
-    const cy = size / 2;
-    const r = (size - 24) / 2;
-    const startAngle = 135;
-    const endAngle = 405;
-    const totalAngle = endAngle - startAngle;
+    const cy = size * 0.48; // Centered slightly above midpoint so arch is balanced
+    const r = size * 0.35;  // Radius of arc
+    const startAngle = 225; // Bottom-left
+    const endAngle = 495;   // Bottom-right
+    const totalAngle = endAngle - startAngle; // 270° sweep
 
-    const polarToCartesian = (angle) => {
+    const polarToCartesian = (angle, radius) => {
       const rad = ((angle - 90) * Math.PI) / 180;
-      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+      return {
+        x: cx + radius * Math.cos(rad),
+        y: cy + radius * Math.sin(rad),
+      };
     };
 
     const arcPath = (a1, a2, radius) => {
-      const s = polarToCartesian(a1);
-      const e = polarToCartesian(a2);
+      const s = polarToCartesian(a1, radius);
+      const e = polarToCartesian(a2, radius);
       const large = (a2 - a1) > 180 ? 1 : 0;
-      return `M ${s.x} ${s.y} A ${radius} ${radius} 0 ${large} 1 ${e.x} ${e.y}`;
+      return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
     };
 
-    // Color segments
-    const segments = thresholds || [max * 0.25, max * 0.5, max * 0.75, max];
+    // Threshold segments
+    const segments = thresholds || [
+      min + (max - min) * 0.25,
+      min + (max - min) * 0.5,
+      min + (max - min) * 0.75,
+      max,
+    ];
     const colors = ['#34d399', '#f59e0b', '#f97316', '#ef4444'];
     const bgArcsArr = [];
     let prevBound = min;
 
     for (let i = 0; i < segments.length; i++) {
-      const segStart = ((prevBound - min) / (max - min));
-      const segEnd = ((segments[i] - min) / (max - min));
+      const segStart = Math.max(0, Math.min(1, (prevBound - min) / (max - min)));
+      const segEnd = Math.max(0, Math.min(1, (segments[i] - min) / (max - min)));
       const a1 = startAngle + totalAngle * segStart;
-      const a2 = startAngle + totalAngle * Math.min(segEnd, 1);
-      
-      const p1 = i === 0 ? a1 : a1 + 5;
-      const p2 = i === segments.length - 1 ? a2 : a2 - 5;
+      const a2 = startAngle + totalAngle * segEnd;
+
+      const gap = 3;
+      const p1 = i === 0 ? a1 : a1 + gap;
+      const p2 = i === segments.length - 1 ? a2 : a2 - gap;
 
       if (p2 > p1) {
-        bgArcsArr.push({ path: arcPath(p1, p2, r), color: colors[i] });
+        bgArcsArr.push({
+          path: arcPath(p1, p2, r),
+          color: colors[i],
+        });
       }
       prevBound = segments[i];
     }
 
-    // Value position
-    const pct = Math.min(1, Math.max(0, (value - min) / (max - min)));
-    const valAngle = startAngle + totalAngle * pct;
-    const vArc = pct > 0.005 ? arcPath(startAngle, valAngle, r - 12) : '';
+    // Active color based on current value
+    const actColor =
+      value >= segments[2] ? '#ef4444' :
+      value >= segments[1] ? '#f97316' :
+      value >= segments[0] ? '#f59e0b' : '#34d399';
 
-    // Needle angle
-    const nAngle = startAngle + totalAngle * pct - 90;
+    // Needle rotation angle (degrees from positive X-axis)
+    const pct = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    const curAngle = startAngle + totalAngle * pct;
+    const nAngle = curAngle - 90;
 
-    // Tick marks dynamically placed at color boundaries
-    const ticksArr = [];
-    const tickValues = [min, ...segments]; // min and all segment bounds
-    
-    tickValues.forEach((val) => {
-      const pct = Math.min(1, Math.max(0, (val - min) / (max - min)));
-      const angle = startAngle + totalAngle * pct;
+    // Tick marks and numerical labels along arc
+    const tickValues = [min, ...segments];
+    const ticksArr = tickValues.map((val) => {
+      const vPct = Math.max(0, Math.min(1, (val - min) / (max - min)));
+      const angle = startAngle + totalAngle * vPct;
       const rad = ((angle - 90) * Math.PI) / 180;
-      const r1 = r + 4; // Extend tick slightly outside arc
-      const r2 = r - 8; // Deeper inward tick
-      const rLabel = r - 24; // Pull label further inside
-      ticksArr.push({
-        x1: cx + r1 * Math.cos(rad),
-        y1: cy + r1 * Math.sin(rad),
-        x2: cx + r2 * Math.cos(rad),
-        y2: cy + r2 * Math.sin(rad),
-        lx: cx + rLabel * Math.cos(rad),
-        ly: cy + rLabel * Math.sin(rad),
+      return {
+        x1: cx + (r + 4) * Math.cos(rad),
+        y1: cy + (r + 4) * Math.sin(rad),
+        x2: cx + (r - 6) * Math.cos(rad),
+        y2: cy + (r - 6) * Math.sin(rad),
+        lx: cx + (r - 18) * Math.cos(rad),
+        ly: cy + (r - 18) * Math.sin(rad),
         label: Math.round(val),
-      });
+      };
     });
 
-    return { bgArcs: bgArcsArr, valueArc: vArc, needleAngle: nAngle, ticks: ticksArr };
+    return {
+      bgArcs: bgArcsArr,
+      needleAngle: nAngle,
+      ticks: ticksArr,
+      segs: segments,
+      activeColor: actColor,
+    };
   }, [value, min, max, size, thresholds]);
 
   const cx = size / 2;
-  const cy = size / 2;
-
-  // Determine active color based on value
-  const segs = thresholds || [max * 0.25, max * 0.5, max * 0.75, max];
-  const activeColor = value >= segs[2] ? '#ef4444' : value >= segs[1] ? '#f97316' : value >= segs[0] ? '#f59e0b' : '#34d399';
+  const cy = size * 0.48;
+  const needleLength = size * 0.35 - 12;
+  const svgHeight = size * 0.78;
 
   return (
-    <div className="gauge-container" style={{ width: '100%', maxWidth: size, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* Color range legend — above the meter */}
+    <div className="gauge-container" style={{ width: '100%', maxWidth: size, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* Metric Ranges bar — above the meter */}
       {showLegend && (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          padding: '3px 12px',
+          background: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.07)',
+          borderRadius: 'var(--radius-full)',
+          marginBottom: 4,
+        }}>
           {['#34d399', '#f59e0b', '#f97316', '#ef4444'].map((c, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, opacity: 0.9, border: '1px solid rgba(255,255,255,0.1)' }} />
-              <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 700 }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: c, boxShadow: `0 0 6px ${c}80}` }} />
+              <span style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontWeight: 700 }}>
                 {(segs[i] || 0).toFixed(0)}
               </span>
             </div>
@@ -111,59 +136,103 @@ export default function MetricGauge({
         </div>
       )}
 
-      <svg width="100%" height="auto" viewBox={`0 0 ${size} ${size * 0.75}`} style={{ maxWidth: size, overflow: 'visible', display: 'block' }}>
-        {/* Background colored arcs (Static segments like reference) */}
+      {/* SVG 270° Arch Gauge */}
+      <svg
+        width="100%"
+        height="auto"
+        viewBox={`0 0 ${size} ${svgHeight}`}
+        style={{ maxWidth: size, display: 'block', overflow: 'visible' }}
+      >
+        {/* Background colored threshold arcs */}
         {bgArcs.map((arc, i) => (
           <path
             key={i}
             d={arc.path}
             fill="none"
             stroke={arc.color}
-            strokeWidth="10"
+            strokeWidth="9"
             strokeLinecap="round"
             opacity="0.9"
-            style={{ filter: `drop-shadow(0 0 8px ${arc.color}40)` }}
+            style={{ filter: `drop-shadow(0 0 6px ${arc.color}35)` }}
           />
         ))}
 
-        {/* Boundary tick marks and labels */}
+        {/* Tick marks & numerical labels */}
         {ticks.map((t, i) => (
           <g key={i}>
-            <line x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" />
-            <text x={t.lx} y={t.ly} textAnchor="middle" dominantBaseline="central"
-              fill="var(--text-secondary)" fontSize="11" fontFamily="var(--font-mono)" fontWeight="700">
+            <line
+              x1={t.x1}
+              y1={t.y1}
+              x2={t.x2}
+              y2={t.y2}
+              stroke="rgba(255,255,255,0.4)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <text
+              x={t.lx}
+              y={t.ly}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="var(--text-muted)"
+              fontSize="9"
+              fontFamily="var(--font-mono)"
+              fontWeight="700"
+            >
               {t.label}
             </text>
           </g>
         ))}
 
-        {/* Needle */}
-        <g style={{ transform: `rotate(${needleAngle}deg)`, transformOrigin: `${cx}px ${cy}px`, transition: 'transform 0.5s ease-out' }}>
-          <line x1={cx} y1={cy} x2={cx + (size / 2 - 30)} y2={cy}
-            stroke={activeColor} strokeWidth="2" strokeLinecap="round"
-            style={{ filter: `drop-shadow(0 0 4px ${activeColor})` }} />
+        {/* Needle pointer */}
+        <g style={{ transform: `rotate(${needleAngle}deg)`, transformOrigin: `${cx}px ${cy}px`, transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+          <line
+            x1={cx}
+            y1={cy}
+            x2={cx + needleLength}
+            y2={cy}
+            stroke={activeColor}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            style={{ filter: `drop-shadow(0 0 5px ${activeColor})` }}
+          />
         </g>
 
-        {/* Center dot */}
-        <circle cx={cx} cy={cy} r="5" fill="var(--bg-dark)" stroke={activeColor} strokeWidth="2" />
+        {/* Center hub */}
+        <circle cx={cx} cy={cy} r="5.5" fill="var(--bg-dark)" stroke={activeColor} strokeWidth="2" />
         <circle cx={cx} cy={cy} r="2.5" fill={activeColor} />
 
-        {/* Center value */}
-        <text x={cx} y={cy + 28} textAnchor="middle" fill={activeColor}
-          fontFamily="var(--font-mono)" fontSize={size > 160 ? '1.6rem' : '1.2rem'} fontWeight="800">
+        {/* Large numerical readout & unit below needle hub */}
+        <text
+          x={cx}
+          y={cy + 24}
+          textAnchor="middle"
+          fill={activeColor}
+          fontFamily="var(--font-mono)"
+          fontSize={size > 160 ? '1.55rem' : '1.25rem'}
+          fontWeight="800"
+        >
           {typeof value === 'number' ? value.toFixed(1) : value}
         </text>
-        <text x={cx} y={cy + 44} textAnchor="middle" fill="var(--text-muted)"
-          fontSize="0.6rem" fontWeight="600" letterSpacing="0.08em">
+        <text
+          x={cx}
+          y={cy + 38}
+          textAnchor="middle"
+          fill="var(--text-muted)"
+          fontSize="0.65rem"
+          fontWeight="700"
+          letterSpacing="0.08em"
+        >
           {unit}
         </text>
       </svg>
 
       {label && (
-        <div style={{ textAlign: 'center', marginTop: -8 }}>
+        <div style={{ textAlign: 'center', marginTop: -4 }}>
           <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
         </div>
       )}
     </div>
   );
 }
+
