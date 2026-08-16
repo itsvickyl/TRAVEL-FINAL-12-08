@@ -854,7 +854,7 @@ h6 { font-size: 1rem; }
 }
 
 /* Responsive Media Queries for Dashboard */
-@media (max-width: 1200px) {
+@media (max-width: 900px) {
   .dashboard {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;

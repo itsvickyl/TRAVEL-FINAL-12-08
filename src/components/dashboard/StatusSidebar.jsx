@@ -25,7 +25,6 @@ function getColor(val, thresholds, invert) {
 }
 
 export default function StatusSidebar({ data, isExpanded, onToggle }) {
-  if (!data) return <div className="dashboard-sidebar" />;
 
   return (
     <div className="dashboard-sidebar" style={{ 
@@ -49,7 +48,7 @@ export default function StatusSidebar({ data, isExpanded, onToggle }) {
         if (key === 'divider') {
           return <div key="divider" className="sidebar-divider" style={{ width: isExpanded ? '100%' : 36, margin: '16px auto' }} />;
         }
-        const val = data[key];
+        const val = data ? (data[key] ?? 0) : (key === 'batteryVoltage' ? 5.0 : 0);
         const color = getColor(val, thresholds, invert);
         return (
           <div key={key} style={{ width: '100%' }}>

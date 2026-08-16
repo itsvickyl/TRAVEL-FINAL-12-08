@@ -489,13 +489,11 @@ export default function Dashboard() {
         data={telemetry.data}
       />
 
-      {telemetry.connected && (
-        <DashboardContent
-          telemetry={telemetry}
-          isExpanded={sidebarExpanded}
-          onToggle={() => setSidebarExpanded(!sidebarExpanded)}
-        />
-      )}
+      <DashboardContent
+        telemetry={telemetry}
+        isExpanded={sidebarExpanded}
+        onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+      />
 
       {!telemetry.connected && (telemetry.connectionState === 'connecting' || telemetry.connectionState === 'reconnecting') && (
         <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 60px)' }}>
