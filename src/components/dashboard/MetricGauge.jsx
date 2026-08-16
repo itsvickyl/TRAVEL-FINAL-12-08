@@ -96,8 +96,8 @@ export default function MetricGauge({
   const activeColor = value >= segs[2] ? '#ef4444' : value >= segs[1] ? '#f97316' : value >= segs[0] ? '#f59e0b' : '#34d399';
 
   return (
-    <div className="gauge-container" style={{ width: size, flexShrink: 0 }}>
-      <svg width={size} height={size * 0.75} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
+    <div className="gauge-container" style={{ width: '100%', maxWidth: size, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <svg width="100%" height="auto" viewBox={`0 0 ${size} ${size * 0.75}`} style={{ maxWidth: size, overflow: 'visible', display: 'block' }}>
         {/* Background colored arcs (Static segments like reference) */}
         {bgArcs.map((arc, i) => (
           <path
@@ -145,17 +145,19 @@ export default function MetricGauge({
         </text>
       </svg>
 
-      <div style={{ textAlign: 'center', marginTop: -8 }}>
-        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
-      </div>
+      {label && (
+        <div style={{ textAlign: 'center', marginTop: -8 }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
+        </div>
+      )}
 
       {/* Color legend */}
       {showLegend && (
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 10 }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 10, flexWrap: 'wrap' }}>
           {['#34d399', '#f59e0b', '#f97316', '#ef4444'].map((c, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: c, opacity: 0.9, border: '1px solid rgba(255,255,255,0.1)' }} />
-              <span style={{ fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 700 }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, opacity: 0.9, border: '1px solid rgba(255,255,255,0.1)' }} />
+              <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 700 }}>
                 {(segs[i] || 0).toFixed(0)}
               </span>
             </div>

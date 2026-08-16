@@ -73,7 +73,7 @@ export default function ConnectionModal({
 
   return (
     <div className="journey-overlay" style={{ zIndex: 999 }}>
-      <div className="journey-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+      <div className="journey-card connection-modal-card" style={{ maxWidth: 'min(520px, calc(100vw - 24px))', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{
             width: 44,
@@ -83,6 +83,7 @@ export default function ConnectionModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            flexShrink: 0,
           }}>
             <Radio size={22} color="var(--primary)" />
           </div>
@@ -152,7 +153,7 @@ export default function ConnectionModal({
               key={p.url}
               className={`chip${url === p.url ? ' active' : ''}`}
               onClick={() => setUrl(p.url)}
-              style={{ fontSize: '0.72rem' }}
+              style={{ fontSize: '0.72rem', wordBreak: 'break-word', textAlign: 'left' }}
             >
               {p.label}
             </button>
@@ -199,10 +200,10 @@ export default function ConnectionModal({
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button
             className="btn btn-primary btn-lg"
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 120 }}
             onClick={handleConnect}
             disabled={!url.trim() || isConnecting}
           >

@@ -66,11 +66,10 @@ function SpeedDisplay({ speed = 0 }) {
   const ms = speed / 3.6;
   const mph = speed * 0.621371;
   return (
-    <div className="widget" style={{
-      display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 24, padding: '16px 24px',
+    <div className="widget speed-display-widget" style={{
       background: 'linear-gradient(135deg, rgba(93,173,226,0.08), rgba(52,211,153,0.05))',
     }}>
-      <div>
+      <div className="speed-display-primary">
         <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Speed <span style={{ fontSize: '0.55rem', color: 'var(--text-dim)' }}>NEO-6M</span></div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '2.2rem', fontWeight: 800, color: 'var(--primary)' }}>
@@ -80,8 +79,8 @@ function SpeedDisplay({ speed = 0 }) {
           <Zap size={16} color="var(--accent-orange)" style={{ marginLeft: 8 }} />
         </div>
       </div>
-      <div style={{ width: 1, height: 36, background: 'var(--border)' }} />
-      <div style={{ display: 'flex', gap: 20 }}>
+      <div className="speed-display-divider" />
+      <div className="speed-display-units">
         <div style={{ textAlign: 'center' }}>
           <div className="mono" style={{ fontSize: '1rem', fontWeight: 700 }}>
             <AnimatedCounter value={kmh} decimals={1} duration={500} />
@@ -96,7 +95,7 @@ function SpeedDisplay({ speed = 0 }) {
         </div>
       </div>
       {/* Speed bar */}
-      <div style={{ flex: 1, minWidth: 100 }}>
+      <div className="speed-display-bar">
         <div style={{ height: 6, background: 'var(--panel)', borderRadius: 3, overflow: 'hidden' }}>
           <div style={{
             width: `${Math.min(100, (speed / 80) * 100)}%`,
@@ -119,7 +118,7 @@ function StatusPanel({ data, history }) {
   return (
     <div className="dashboard-panel" style={{ gap: 10, padding: 10 }}>
       {/* Map */}
-      <div style={{ flex: 1, minHeight: 200, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column' }}>
         <LiveMap data={data} history={history} />
       </div>
 
@@ -228,6 +227,7 @@ function StatusPanel({ data, history }) {
 function DashboardContent({ telemetry, isExpanded, onToggle }) {
   const { data, history, alerts, dismissAlert } = telemetry;
   const [showSummary, setShowSummary] = useState(false);
+  const [mobileTab, setMobileTab] = useState('all'); // 'all', 'gauges', 'map', 'inspector', 'logs'
   const mainRef = useRef(null);
 
   useLayoutEffect(() => {
@@ -238,7 +238,7 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
         { opacity: 1, y: 0, scale: 1, stagger: 0.08, duration: 0.8, ease: 'power3.out', delay: 0.2 }
       );
     }
-  }, []);
+  }, [mobileTab]);
 
   return (
     <>
@@ -247,68 +247,143 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
 
       {/* Main content area */}
       <div className="dashboard-main" ref={mainRef} style={{ gap: 10, padding: 10 }}>
-        {/* Section Header: PRIMARY METRICS */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: -4 }}>
-          <CompassRose heading={data?.heading || 0} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Layers size={16} color="var(--primary)" />
-              <h3 style={{ margin: 0, fontSize: '1rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                Primary Metrics
-              </h3>
+        {/* Mobile View Switcher (Only visible on screens <= 1024px) */}
+        <div className="dashboard-mobile-tabs">
+          <button 
+            className={`mobile-tab-btn ${mobileTab === 'all' ? 'active' : ''}`}
+            onClick={() => setMobileTab('all')}
+          >
+            📊 All
+          </button>
+          <button 
+            className={`mobile-tab-btn ${mobileTab === 'gauges' ? 'active' : ''}`}
+            onClick={() => setMobileTab('gauges')}
+          >
+            ⚡ Gauges
+          </button>
+          <button 
+            className={`mobile-tab-btn ${mobileTab === 'map' ? 'active' : ''}`}
+            onClick={() => setMobileTab('map')}
+          >
+            🗺️ Map & IMU
+          </button>
+          <button 
+            className={`mobile-tab-btn ${mobileTab === 'inspector' ? 'active' : ''}`}
+            onClick={() => setMobileTab('inspector')}
+          >
+            🔍 Sensors
+          </button>
+          <button 
+            className={`mobile-tab-btn ${mobileTab === 'logs' ? 'active' : ''}`}
+            onClick={() => setMobileTab('logs')}
+          >
+            📈 Logs
+          </button>
+        </div>
+
+        {/* Section: GAUGES & SPEED */}
+        {(mobileTab === 'all' || mobileTab === 'gauges') && (
+          <>
+            {/* Section Header: PRIMARY METRICS */}
+            <div className="primary-metrics-header" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: -4 }}>
+              <CompassRose heading={data?.heading || 0} />
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Layers size={16} color="var(--primary)" />
+                  <h3 style={{ margin: 0, fontSize: '1rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    Primary Metrics
+                  </h3>
+                </div>
+                <div className="glow-line" style={{ marginTop: 6, width: 200 }} />
+              </div>
             </div>
-            <div className="glow-line" style={{ marginTop: 6, width: 200 }} />
+
+            {/* 2x2 Gauge Grid — actual sensors */}
+            <div className="dashboard-gauge-grid">
+              <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Temperature <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>DHT11</span></div>
+                <MetricGauge value={data?.temperature || 0} min={0} max={50} label="" unit="°C" size={200} thresholds={[20, 35, 42, 50]} />
+              </div>
+
+              <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Humidity <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>DHT11</span></div>
+                <MetricGauge value={data?.humidity || 0} min={20} max={90} label="" unit="%" size={200} thresholds={[30, 50, 70, 90]} />
+              </div>
+
+              <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Pressure <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>BMP280</span></div>
+                <MetricGauge value={data?.pressure || 1013} min={950} max={1050} label="" unit="hPa" size={200} thresholds={[970, 1000, 1030, 1050]} />
+              </div>
+
+              <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Air Quality <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>MQ-135</span></div>
+                <MetricGauge value={data?.airQuality || 0} min={0} max={700} label="" unit="PPM" size={200} thresholds={[100, 200, 400, 700]} />
+              </div>
+            </div>
+
+            {/* Speed Display (NEO-6M) */}
+            <SpeedDisplay speed={data?.speed || 0} />
+          </>
+        )}
+
+        {/* Section: MAP & IMU (Inlined on mobile screens) */}
+        {(mobileTab === 'all' || mobileTab === 'map') && (
+          <div className="mobile-only-status-section">
+            <div style={{ minHeight: 280, display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
+              <LiveMap data={data} history={history} />
+            </div>
+            <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 12px', minHeight: 220, marginBottom: 10, overflow: 'visible' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 20, letterSpacing: '0.1em', alignSelf: 'flex-start' }}>MPU-6050 GYRO</div>
+              <OrientationCube pitch={data?.pitch} roll={data?.roll} yaw={data?.yaw} />
+            </div>
+            {/* Coordinates and Satellites */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
+              <div className="env-card" style={{ padding: '8px 10px' }}>
+                <div className="env-card-info">
+                  <div className="env-card-label">LAT / LNG</div>
+                  <div className="mono" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                    {data?.lat?.toFixed(3) || '0.000'}, {data?.lng?.toFixed(3) || '0.000'}
+                  </div>
+                </div>
+              </div>
+              <div className="env-card" style={{ padding: '8px 10px' }}>
+                <div className="env-card-info">
+                  <div className="env-card-label">SATS / PIR</div>
+                  <div className="mono" style={{ fontSize: '0.8rem', fontWeight: 700, color: data?.motionDetected ? 'var(--danger)' : 'var(--accent-green)' }}>
+                    {data?.satellites || 0} Sats · {data?.motionDetected ? '🔴 Motion' : '⚪ Clear'}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* 2x2 Gauge Grid — actual sensors */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Temperature <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>DHT11</span></div>
-            <MetricGauge value={data?.temperature || 0} min={0} max={50} label="" unit="°C" size={200} thresholds={[20, 35, 42, 50]} />
-          </div>
+        {/* Section: SENSOR INSPECTOR */}
+        {(mobileTab === 'all' || mobileTab === 'inspector') && (
+          <SensorInspector data={data} />
+        )}
 
-          <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Humidity <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>DHT11</span></div>
-            <MetricGauge value={data?.humidity || 0} min={20} max={90} label="" unit="%" size={200} thresholds={[30, 50, 70, 90]} />
-          </div>
-
-          <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Pressure <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>BMP280</span></div>
-            <MetricGauge value={data?.pressure || 1013} min={950} max={1050} label="" unit="hPa" size={200} thresholds={[970, 1000, 1030, 1050]} />
-          </div>
-
-          <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Air Quality <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>MQ-135</span></div>
-            <MetricGauge value={data?.airQuality || 0} min={0} max={700} label="" unit="PPM" size={200} thresholds={[100, 200, 400, 700]} />
-          </div>
-        </div>
-
-        {/* Speed Display (NEO-6M) */}
-        <SpeedDisplay speed={data?.speed || 0} />
-
-        {/* Sensor Inspector — check one-by-one */}
-        <SensorInspector data={data} />
-
-        {/* Trend Chart */}
-        <div style={{ marginBottom: 12 }}>
-          <TrendChart history={history} />
-        </div>
-
-        {/* Raw Telemetry Terminal */}
-        <div style={{ marginBottom: 12 }}>
-          <RawTelemetryTable data={data} />
-        </div>
+        {/* Section: TRENDS & LOGS */}
+        {(mobileTab === 'all' || mobileTab === 'logs') && (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <TrendChart history={history} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <RawTelemetryTable data={data} />
+            </div>
+          </>
+        )}
 
         {/* Journey Summary button */}
-        <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 8, paddingTop: 4 }}>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowSummary(true)}>
             <Info size={14} /> Journey Summary
           </button>
         </div>
       </div>
 
-      {/* Right Panel: Map + Status */}
+      {/* Right Panel: Map + Status (Desktop Only) */}
       <StatusPanel data={data} history={history} />
 
       {showSummary && (
