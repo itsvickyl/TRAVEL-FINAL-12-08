@@ -455,91 +455,73 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
   );
 }
 
-/* ─── Live Dashboard ─── */
-function LiveDashboard({ isExpanded, onToggle }) {
-  const [wsUrl, setWsUrl] = useState(() => localStorage.getItem('lollyd_ws_url') || null);
+/* ─── Main Export ─── */
+export default function Dashboard() {
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [wsUrl, setWsUrl] = useState(() => localStorage.getItem('lollyd_ws_url') || 'wss://lollyd-relay.onrender.com');
   const [fieldMap, setFieldMap] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lollyd_field_map') || '{}'); } catch { return {}; }
   });
-  const [enabled, setEnabled] = useState(() => !!localStorage.getItem('lollyd_ws_url'));
-  const telemetry = useTelemetrySocket(wsUrl, { fieldMap, enabled });
+  const [showConfigModal, setShowConfigModal] = useState(false);
+
+  const telemetry = useTelemetrySocket(wsUrl, { fieldMap, enabled: true });
 
   const handleConnect = (url, fMap) => {
     localStorage.setItem('lollyd_ws_url', url);
     if (fMap && Object.keys(fMap).length > 0) localStorage.setItem('lollyd_field_map', JSON.stringify(fMap));
     setWsUrl(url);
     setFieldMap(fMap || {});
-    setEnabled(true);
+    setShowConfigModal(false);
   };
 
-  const handleDisconnect = () => { telemetry.disconnect(); setEnabled(false); setWsUrl(null); };
-  const showModal = !telemetry.connected && telemetry.connectionState !== 'connecting' && telemetry.connectionState !== 'reconnecting';
+  const handleDisconnect = () => {
+    setShowConfigModal(true);
+  };
 
-  return (
-    <>
-      <DashboardNavbar connected={telemetry.connected} connectionState={telemetry.connectionState}
-        messageCount={telemetry.messageCount} onDisconnect={handleDisconnect} data={telemetry.data} />
-      {telemetry.connected && <DashboardContent telemetry={telemetry} isExpanded={isExpanded} onToggle={onToggle} />}
-      {!telemetry.connected && (telemetry.connectionState === 'connecting' || telemetry.connectionState === 'reconnecting') && (
-        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="route-loading" style={{ background: 'transparent' }}>
-            <div className="route-loading-spinner" />
-            <div className="route-loading-text">{telemetry.connectionState === 'reconnecting' ? 'Reconnecting...' : 'Connecting to IoT device...'}</div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>{wsUrl}</p>
-          </div>
-        </div>
-      )}
-      {showModal && (
-        <ConnectionModal onConnect={handleConnect} onDemoMode={() => {}} connectionState={telemetry.connectionState}
-          error={telemetry.error} messageCount={telemetry.messageCount} onDisconnect={handleDisconnect} currentUrl={wsUrl} />
-      )}
-    </>
-  );
-}
-
-/* ─── Demo Dashboard ─── */
-function DemoDashboard({ isExpanded, onToggle }) {
-  const telemetry = useDemoTelemetry();
-  return (
-    <>
-      <DashboardNavbar connected={true} connectionState="demo" messageCount={telemetry.messageCount} data={telemetry.data} />
-      <DashboardContent telemetry={telemetry} isExpanded={isExpanded} onToggle={onToggle} />
-    </>
-  );
-}
-
-/* ─── Main Export ─── */
-export default function Dashboard() {
-  const [mode, setMode] = useState(null);
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
   return (
     <div className={`dashboard ${sidebarExpanded ? 'sidebar-expanded' : ''}`}>
       <ClickSpark />
-      {mode === 'live' && <LiveDashboard isExpanded={sidebarExpanded} onToggle={() => setSidebarExpanded(!sidebarExpanded)} />}
-      {mode === 'demo' && <DemoDashboard isExpanded={sidebarExpanded} onToggle={() => setSidebarExpanded(!sidebarExpanded)} />}
-      {mode === null && (
-        <>
-          <div className="dashboard-topbar">
-            <div className="dashboard-topbar-left">
-              <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                Lolly<span className="text-gradient">D</span> — Telemetry Dashboard
-              </span>
-            </div>
-          </div>
-          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ConnectionModal
-              onConnect={(url, fMap) => {
-                localStorage.setItem('lollyd_ws_url', url);
-                if (fMap && Object.keys(fMap).length > 0) localStorage.setItem('lollyd_field_map', JSON.stringify(fMap));
-                setMode('live');
-              }}
-              onDemoMode={() => setMode('demo')}
-              connectionState="idle" error={null} messageCount={0}
-              currentUrl={localStorage.getItem('lollyd_ws_url') || ''}
-            />
-          </div>
-        </>
+      <DashboardNavbar
+        connected={telemetry.connected}
+        connectionState={telemetry.connectionState}
+        messageCount={telemetry.messageCount}
+        onDisconnect={handleDisconnect}
+        data={telemetry.data}
+      />
+
+      {telemetry.connected && (
+        <DashboardContent
+          telemetry={telemetry}
+          isExpanded={sidebarExpanded}
+          onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+        />
       )}
+
+      {!telemetry.connected && (telemetry.connectionState === 'connecting' || telemetry.connectionState === 'reconnecting') && (
+        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 60px)' }}>
+          <div className="route-loading" style={{ background: 'transparent' }}>
+            <div className="route-loading-spinner" />
+            <div className="route-loading-text">
+              {telemetry.connectionState === 'reconnecting' ? 'Reconnecting to hardware stream...' : 'Connecting to Live Telemetry Relay...'}
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)', marginTop: 8 }}>{wsUrl}</p>
+          </div>
+        </div>
+      )}
+
+      {(!telemetry.connected && telemetry.connectionState !== 'connecting' && telemetry.connectionState !== 'reconnecting') || showConfigModal ? (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(7, 16, 24, 0.85)', backdropFilter: 'blur(16px)' }}>
+          <ConnectionModal
+            onConnect={handleConnect}
+            onDemoMode={() => setShowConfigModal(false)}
+            connectionState={telemetry.connectionState}
+            error={telemetry.error}
+            messageCount={telemetry.messageCount}
+            onDisconnect={() => setShowConfigModal(false)}
+            currentUrl={wsUrl}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

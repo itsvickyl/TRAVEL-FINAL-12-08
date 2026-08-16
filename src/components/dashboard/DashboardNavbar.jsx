@@ -13,17 +13,17 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
     return () => clearInterval(int);
   }, []);
 
-  const isDemo = connectionState === 'demo';
   const isReconnecting = connectionState === 'reconnecting';
-  const stateLabel = isDemo ? 'STANDBY' : isReconnecting ? 'RECONNECTING' : connected ? 'ACTIVE' : 'DISCONNECTED';
-  const stateColor = isDemo ? 'var(--accent-orange)' : connected ? 'var(--accent-green)' : 'var(--danger)';
+  const hasReceivedData = messageCount > 0 && !!data?.timestamp;
+  const stateLabel = isReconnecting ? 'RECONNECTING' : (connected && hasReceivedData) ? 'LIVE ACTIVE' : connected ? 'CONNECTED (AWAITING DATA)' : 'DISCONNECTED';
+  const stateColor = (connected && hasReceivedData) ? 'var(--accent-green)' : connected ? 'var(--accent-orange)' : 'var(--danger)';
 
   const timeStr = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const updatedStr = data?.timestamp ? new Date(data.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+  const updatedStr = hasReceivedData ? new Date(data.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Awaiting data';
 
   // Arduino supply voltage (3.0V-5.2V range)
-  const supplyPct = data ? Math.min(100, Math.max(0, ((data.batteryVoltage - 3.0) / 2.2) * 100)) : 0;
-  const supplyColor = supplyPct < 20 ? 'var(--danger)' : supplyPct < 50 ? 'var(--accent-orange)' : 'var(--accent-green)';
+  const supplyPct = data?.batteryVoltage ? Math.min(100, Math.max(0, ((data.batteryVoltage - 3.0) / 2.2) * 100)) : 0;
+  const supplyColor = !data?.batteryVoltage ? 'var(--text-muted)' : supplyPct < 20 ? 'var(--danger)' : supplyPct < 50 ? 'var(--accent-orange)' : 'var(--accent-green)';
 
   return (
     <div className="dashboard-topbar">
@@ -40,11 +40,10 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
 
         {/* Connection badge */}
         <div className="dashboard-badge-item connection-badge-wrap">
-          <div className={`connection-dot ${connected || isDemo ? 'connected' : 'disconnected'}`}
-            style={isDemo ? { background: 'var(--accent-orange)' } :
-              isReconnecting ? { animation: 'pulse 0.5s infinite' } : {}} />
-          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: connected || isDemo ? 'var(--accent-green)' : 'var(--danger)' }}>
-            {connected ? 'LIVE' : isDemo ? 'DEMO' : 'OFFLINE'}
+          <div className={`connection-dot ${connected && hasReceivedData ? 'connected' : 'disconnected'}`}
+            style={isReconnecting ? { animation: 'pulse 0.5s infinite', background: 'var(--accent-orange)' } : !hasReceivedData && connected ? { background: 'var(--accent-orange)' } : {}} />
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: (connected && hasReceivedData) ? 'var(--accent-green)' : connected ? 'var(--accent-orange)' : 'var(--danger)' }}>
+            {connected && hasReceivedData ? 'LIVE' : connected ? 'CONNECTING' : 'OFFLINE'}
           </span>
         </div>
 
@@ -74,8 +73,8 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
             color: supplyColor,
             display: 'flex', alignItems: 'center', gap: 4,
           }}>
-            PWR: {data?.batteryVoltage?.toFixed(1) || '0.0'}V
-            {supplyPct < 20 && <span style={{ color: 'var(--danger)' }}>▲</span>}
+            PWR: {data?.batteryVoltage ? `${data.batteryVoltage.toFixed(1)}V` : '— V'}
+            {supplyPct < 20 && data?.batteryVoltage > 0 && <span style={{ color: 'var(--danger)' }}>▲</span>}
           </span>
 
           <div className="topbar-divider" />
@@ -85,13 +84,13 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
             display: 'flex', alignItems: 'center', gap: 4,
           }}>
             <Radio size={12} color="var(--primary)" />
-            RSSI: <span style={{ color: 'var(--primary)' }}>{data?.loraRSSI?.toFixed(0) || '—'}</span>dBm
+            RSSI: <span style={{ color: 'var(--primary)' }}>{data?.loraRSSI ? `${data.loraRSSI.toFixed(0)} dBm` : '—'}</span>
           </span>
         </div>
 
-        {onDisconnect && (connected || isDemo) && (
+        {onDisconnect && (
           <button className="btn btn-ghost btn-sm reconnect-btn-desktop" onClick={onDisconnect} style={{ fontSize: '0.68rem', padding: '4px 10px' }}>
-            RECONNECT
+            CHANGE SOURCE
           </button>
         )}
       </div>

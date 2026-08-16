@@ -180,10 +180,10 @@ export default function LiveMap({ data, history }) {
           attribution='&copy; OpenStreetMap &copy; CARTO &copy; ESRI'
         />
 
-        {data && <MapController position={position} isFollowing={isFollowing} setIsFollowing={setIsFollowing} />}
+        {hasFix && <MapController position={position} isFollowing={isFollowing} setIsFollowing={setIsFollowing} />}
 
-        {/* Operational Range Perimeter */}
-        {data && rangeRadiusMeters > 0 && (
+        {/* Operational Range Perimeter (Only when real GPS position exists) */}
+        {hasFix && rangeRadiusMeters > 0 && (
           <Circle
             center={position}
             radius={rangeRadiusMeters}
@@ -198,19 +198,19 @@ export default function LiveMap({ data, history }) {
           />
         )}
 
-        {/* Vehicle Marker */}
-        {data && (
+        {/* Real Vehicle Marker (Only when real GPS fix exists) */}
+        {hasFix && (
           <Marker position={position} icon={createVehicleIcon(data.heading || 0)} />
         )}
 
-        {/* Trail polylines */}
-        {trail.length > 1 && mapStyle === 'satellite' && (
+        {/* Trail polylines from true GPS points */}
+        {hasFix && trail.length > 1 && mapStyle === 'satellite' && (
           <Polyline
             positions={trail}
             pathOptions={{ color: '#00b7ffff', weight: 4, opacity: 1 }}
           />
         )}
-        {trail.length > 1 && (
+        {hasFix && trail.length > 1 && (
           <Polyline
             positions={trail}
             pathOptions={{

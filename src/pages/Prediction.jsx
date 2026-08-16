@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Network, Battery, Route, CloudLightning, Activity, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { useDemoTelemetry } from '../hooks/useDemoTelemetry';
+import { useTelemetrySocket } from '../hooks/useTelemetrySocket';
 import ClickSpark from '../components/reactbits/ClickSpark';
 
 function generatePredictionCurve(history, key) {
@@ -107,25 +107,30 @@ const PredictiveChart = ({ title, data, color, unit }) => (
 );
 
 export default function Prediction() {
-  const { data, history } = useDemoTelemetry();
+  const wsUrl = useMemo(() => localStorage.getItem('lollyd_ws_url') || 'wss://lollyd-relay.onrender.com', []);
+  const fieldMap = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('lollyd_field_map') || '{}'); } catch { return {}; }
+  }, []);
+  const { data, history, connected } = useTelemetrySocket(wsUrl, { fieldMap, enabled: true });
   
   const [anomaly, setAnomaly] = useState('NOMINAL');
   const [weatherPredict, setWeatherPredict] = useState('Clear Skies');
   
   // Predictions Logic
-  const batteryPct = data ? Math.min(100, Math.max(0, ((data.batteryVoltage - 10) / 4.5) * 100)) : 0;
-  const predictedRange = data ? Math.max(0, batteryPct * 3.4 * (120 / Math.max(80, data.speed))).toFixed(1) : '0.0';
-  const drainRate = data ? Math.max(0.1, data.speed / 150) : 1; 
+  const batteryPct = data ? Math.min(100, Math.max(0, ((data.batteryVoltage - 3.0) / 2.2) * 100)) : 0;
+  const predictedRange = data ? Math.max(0, batteryPct * 3.4 * (120 / Math.max(80, data.speed || 1))).toFixed(1) : '0.0';
+  const drainRate = data ? Math.max(0.1, (data.speed || 1) / 150) : 1; 
   const timeToEmptyMins = data ? Math.floor(batteryPct / drainRate) : 0;
   const tteHours = Math.floor(timeToEmptyMins / 60);
   const tteMins = timeToEmptyMins % 60;
 
   useEffect(() => {
     if (!data) return;
-    if (data.pressure < 980) setWeatherPredict('Storm Warning');
-    else if (data.pressure < 1000) setWeatherPredict('Rain Likely');
+    if (data.pressure > 0 && data.pressure < 980) setWeatherPredict('Storm Warning');
+    else if (data.pressure > 0 && data.pressure < 1000) setWeatherPredict('Rain Likely');
     else if (data.pressure > 1020) setWeatherPredict('Clear Skies');
-    else setWeatherPredict('Stable Environment');
+    else if (data.pressure > 0) setWeatherPredict('Stable Environment');
+    else setWeatherPredict('Awaiting BMP280 Live Data');
 
     const isAnomalous = Math.abs(data.pitch) > 15 || Math.abs(data.roll) > 15 || data.gX > 100;
     setAnomaly(isAnomalous ? 'WARN: GYRO INSTABILITY' : 'NOMINAL');

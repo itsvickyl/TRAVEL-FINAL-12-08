@@ -57,12 +57,12 @@ const DEFAULT_STATE = {
   satellites: 0,
 
   // MPU-6050
-  aX: 0, aY: 0, aZ: 1.0,
+  aX: 0, aY: 0, aZ: 0,
   gX: 0, gY: 0, gZ: 0,
   pitch: 0, roll: 0, yaw: 0,
 
   // BMP280
-  pressure: 1013,
+  pressure: 0,
   altitude: 0,
 
   // DHT11
@@ -81,9 +81,10 @@ const DEFAULT_STATE = {
   signalStrength: 0,
 
   // Arduino
-  batteryVoltage: 5.0,
+  batteryVoltage: 0,
+  sd: false,
 
-  timestamp: Date.now(),
+  timestamp: null,
 };
 
 function checkAlerts(data) {
