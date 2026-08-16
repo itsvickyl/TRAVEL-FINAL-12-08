@@ -46,15 +46,28 @@ function CompassRose({ heading = 0 }) {
 
 /* ─── Orientation / IMU Cube (MPU-6050) ─── */
 function OrientationCube({ pitch = 0, roll = 0, yaw = 0 }) {
+  const p = typeof pitch === 'number' ? pitch : 0;
+  const r = typeof roll === 'number' ? roll : 0;
+  const y = typeof yaw === 'number' ? yaw : 0;
   return (
-    <div className="cube-scene">
-      <div className="cube" style={{ transform: `rotateX(${-pitch}deg) rotateY(${yaw}deg) rotateZ(${-roll}deg)` }}>
-        <div className="cube-face cube-front">FRONT</div>
-        <div className="cube-face cube-back">BACK</div>
-        <div className="cube-face cube-right">RIGHT</div>
-        <div className="cube-face cube-left">LEFT</div>
-        <div className="cube-face cube-top">TOP</div>
-        <div className="cube-face cube-bottom">BOTTOM</div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <div className="cube-scene">
+        <div className="cube" style={{ transform: `rotateX(${-p}deg) rotateY(${y}deg) rotateZ(${-r}deg)` }}>
+          <div className="cube-face cube-front">FRONT</div>
+          <div className="cube-face cube-back">BACK</div>
+          <div className="cube-face cube-right">RIGHT</div>
+          <div className="cube-face cube-left">LEFT</div>
+          <div className="cube-face cube-top">TOP</div>
+          <div className="cube-face cube-bottom">BTM</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+        {[{ label: 'Pitch', val: p }, { label: 'Roll', val: r }, { label: 'Yaw', val: y }].map(({ label, val }) => (
+          <div key={label} style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 700, color: Math.abs(val) > 20 ? 'var(--accent-orange)' : 'var(--text-primary)' }}>{val.toFixed(1)}°</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -123,8 +136,8 @@ function StatusPanel({ data, history }) {
       </div>
 
       {/* 3D Gyroscope (MPU-6050) */}
-      <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 12px', minHeight: 220, overflow: 'visible' }}>
-        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 20, letterSpacing: '0.1em', alignSelf: 'flex-start' }}>MPU-6050 GYRO</div>
+      <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px', overflow: 'visible' }}>
+        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.1em', alignSelf: 'flex-start' }}>MPU-6050 GYRO</div>
         <OrientationCube pitch={data?.pitch} roll={data?.roll} yaw={data?.yaw} />
       </div>
 
@@ -285,39 +298,47 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
         {(mobileTab === 'all' || mobileTab === 'gauges') && (
           <>
             {/* Section Header: PRIMARY METRICS */}
-            <div className="primary-metrics-header" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: -4 }}>
+            <div className="primary-metrics-header" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 4, padding: '4px 0' }}>
               <CompassRose heading={data?.heading || 0} />
-              <div>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Layers size={16} color="var(--primary)" />
-                  <h3 style={{ margin: 0, fontSize: '1rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  <h3 style={{ margin: 0, fontSize: '0.95rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                     Primary Metrics
                   </h3>
                 </div>
-                <div className="glow-line" style={{ marginTop: 6, width: 200 }} />
+                <div className="glow-line" style={{ marginTop: 6, width: 180 }} />
               </div>
             </div>
 
             {/* 2x2 Gauge Grid — actual sensors */}
             <div className="dashboard-gauge-grid">
-              <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Temperature <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>DHT11</span></div>
-                <MetricGauge value={data?.temperature || 0} min={0} max={50} label="" unit="°C" size={200} thresholds={[20, 35, 42, 50]} />
+              <div className="widget gauge-card">
+                <div className="gauge-card-label">Temperature <span>DHT11</span></div>
+                <div className="gauge-card-content">
+                  <MetricGauge value={data?.temperature || 0} min={0} max={50} label="" unit="°C" size={200} thresholds={[20, 35, 42, 50]} />
+                </div>
               </div>
 
-              <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Humidity <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>DHT11</span></div>
-                <MetricGauge value={data?.humidity || 0} min={20} max={90} label="" unit="%" size={200} thresholds={[30, 50, 70, 90]} />
+              <div className="widget gauge-card">
+                <div className="gauge-card-label">Humidity <span>DHT11</span></div>
+                <div className="gauge-card-content">
+                  <MetricGauge value={data?.humidity || 0} min={20} max={90} label="" unit="%" size={200} thresholds={[30, 50, 70, 90]} />
+                </div>
               </div>
 
-              <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Pressure <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>BMP280</span></div>
-                <MetricGauge value={data?.pressure || 1013} min={950} max={1050} label="" unit="hPa" size={200} thresholds={[970, 1000, 1030, 1050]} />
+              <div className="widget gauge-card">
+                <div className="gauge-card-label">Pressure <span>BMP280</span></div>
+                <div className="gauge-card-content">
+                  <MetricGauge value={data?.pressure || 1013} min={950} max={1050} label="" unit="hPa" size={200} thresholds={[970, 1000, 1030, 1050]} />
+                </div>
               </div>
 
-              <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 16 }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, alignSelf: 'flex-start' }}>Air Quality <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>MQ-135</span></div>
-                <MetricGauge value={data?.airQuality || 0} min={0} max={700} label="" unit="PPM" size={200} thresholds={[100, 200, 400, 700]} />
+              <div className="widget gauge-card">
+                <div className="gauge-card-label">Air Quality <span>MQ-135</span></div>
+                <div className="gauge-card-content">
+                  <MetricGauge value={data?.airQuality || 0} min={0} max={700} label="" unit="PPM" size={200} thresholds={[100, 200, 400, 700]} />
+                </div>
               </div>
             </div>
 
@@ -332,8 +353,8 @@ function DashboardContent({ telemetry, isExpanded, onToggle }) {
             <div style={{ minHeight: 280, display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
               <LiveMap data={data} history={history} />
             </div>
-            <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 12px', minHeight: 220, marginBottom: 10, overflow: 'visible' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 20, letterSpacing: '0.1em', alignSelf: 'flex-start' }}>MPU-6050 GYRO</div>
+            <div className="widget" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px', marginBottom: 10, overflow: 'visible' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.1em', alignSelf: 'flex-start' }}>MPU-6050 GYRO</div>
               <OrientationCube pitch={data?.pitch} roll={data?.roll} yaw={data?.yaw} />
             </div>
             {/* Coordinates and Satellites */}

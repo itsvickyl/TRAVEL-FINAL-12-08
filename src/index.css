@@ -693,7 +693,7 @@ h6 { font-size: 1rem; }
 .dashboard-main {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   padding: 12px;
   overflow-y: auto;
   min-width: 0;
@@ -731,6 +731,35 @@ h6 { font-size: 1rem; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.gauge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px;
+}
+
+.gauge-card-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  align-self: flex-start;
+}
+
+.gauge-card-label span {
+  font-size: 0.58rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.gauge-card-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 240px;
 }
 
 .mobile-only-status-section {
@@ -824,6 +853,9 @@ h6 { font-size: 1rem; }
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
   }
+  .dashboard.sidebar-expanded {
+    grid-template-columns: 1fr;
+  }
   .dashboard-sidebar {
     display: none;
   }
@@ -835,6 +867,9 @@ h6 { font-size: 1rem; }
   }
   .mobile-only-status-section {
     display: block;
+  }
+  .gauge-card-content {
+    max-width: 260px;
   }
 }
 
@@ -857,6 +892,12 @@ h6 { font-size: 1rem; }
 @media (max-width: 640px) {
   .dashboard-gauge-grid {
     grid-template-columns: 1fr;
+  }
+  .gauge-card {
+    padding: 12px;
+  }
+  .gauge-card-content {
+    max-width: 280px;
   }
   .speed-display-widget {
     flex-direction: column;
@@ -2480,8 +2521,8 @@ h6 { font-size: 1rem; }
    3D Orientation Cube — MPU-6050 Gyroscope Visualization
    =================================================================== */
 .cube-scene {
-  width: 140px;
-  height: 140px;
+  width: 120px;
+  height: 120px;
   perspective: 500px;
   perspective-origin: 50% 50%;
   margin: 0 auto;
@@ -2497,13 +2538,13 @@ h6 { font-size: 1rem; }
 
 .cube-face {
   position: absolute;
-  width: 140px;
-  height: 140px;
+  width: 120px;
+  height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   color: rgba(255, 255, 255, 0.85);
@@ -2515,59 +2556,60 @@ h6 { font-size: 1rem; }
 .cube-front {
   background: rgba(93, 173, 226, 0.18);
   border-color: rgba(93, 173, 226, 0.4);
-  transform: translateZ(70px);
+  transform: translateZ(60px);
   box-shadow: inset 0 0 30px rgba(93, 173, 226, 0.08);
 }
 
 .cube-back {
   background: rgba(100, 116, 139, 0.15);
   border-color: rgba(100, 116, 139, 0.3);
-  transform: rotateY(180deg) translateZ(70px);
+  transform: rotateY(180deg) translateZ(60px);
 }
 
 .cube-right {
   background: rgba(52, 211, 153, 0.15);
   border-color: rgba(52, 211, 153, 0.3);
-  transform: rotateY(90deg) translateZ(70px);
+  transform: rotateY(90deg) translateZ(60px);
   box-shadow: inset 0 0 30px rgba(52, 211, 153, 0.06);
 }
 
 .cube-left {
   background: rgba(245, 158, 11, 0.15);
   border-color: rgba(245, 158, 11, 0.3);
-  transform: rotateY(-90deg) translateZ(70px);
+  transform: rotateY(-90deg) translateZ(60px);
   box-shadow: inset 0 0 30px rgba(245, 158, 11, 0.06);
 }
 
 .cube-top {
   background: rgba(139, 92, 246, 0.15);
   border-color: rgba(139, 92, 246, 0.3);
-  transform: rotateX(90deg) translateZ(70px);
+  transform: rotateX(90deg) translateZ(60px);
   box-shadow: inset 0 0 30px rgba(139, 92, 246, 0.06);
 }
 
 .cube-bottom {
   background: rgba(255, 82, 82, 0.15);
   border-color: rgba(255, 82, 82, 0.3);
-  transform: rotateX(-90deg) translateZ(70px);
+  transform: rotateX(-90deg) translateZ(60px);
   box-shadow: inset 0 0 30px rgba(255, 82, 82, 0.06);
 }
 
 @media (max-width: 640px) {
   .cube-scene {
-    width: 110px;
-    height: 110px;
+    width: 100px;
+    height: 100px;
     perspective: 400px;
   }
   .cube-face {
-    width: 110px;
-    height: 110px;
-    font-size: 0.6rem;
+    width: 100px;
+    height: 100px;
+    font-size: 0.55rem;
   }
-  .cube-front  { transform: translateZ(55px); }
-  .cube-back   { transform: rotateY(180deg) translateZ(55px); }
-  .cube-right  { transform: rotateY(90deg) translateZ(55px); }
-  .cube-left   { transform: rotateY(-90deg) translateZ(55px); }
-  .cube-top    { transform: rotateX(90deg) translateZ(55px); }
-  .cube-bottom { transform: rotateX(-90deg) translateZ(55px); }
+  .cube-front  { transform: translateZ(50px); }
+  .cube-back   { transform: rotateY(180deg) translateZ(50px); }
+  .cube-right  { transform: rotateY(90deg) translateZ(50px); }
+  .cube-left   { transform: rotateY(-90deg) translateZ(50px); }
+  .cube-top    { transform: rotateX(90deg) translateZ(50px); }
+  .cube-bottom { transform: rotateX(-90deg) translateZ(50px); }
 }
+
