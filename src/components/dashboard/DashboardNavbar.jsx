@@ -13,11 +13,39 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
     return () => clearInterval(int);
   }, []);
 
+  const [connectStartTime, setConnectStartTime] = useState(null);
+
   const isReconnecting = connectionState === 'reconnecting';
   const hasReceivedData = messageCount > 0 && !!data?.timestamp;
   const stateLabel = isReconnecting ? 'RECONNECTING' : (connected && hasReceivedData) ? 'LIVE ACTIVE' : connected ? 'CONNECTED (AWAITING DATA)' : 'DISCONNECTED';
   const stateColor = (connected && hasReceivedData) ? 'var(--accent-green)' : connected ? 'var(--accent-orange)' : 'var(--danger)';
 
+  useEffect(() => {
+    if (connected && hasReceivedData) {
+      if (!connectStartTime) {
+        setConnectStartTime(Date.now());
+      }
+    } else if (!connected) {
+      setConnectStartTime(null);
+    }
+  }, [connected, hasReceivedData, connectStartTime]);
+
+  // Calculate uptime in seconds
+  const totalUptimeSec = data?.uptime && typeof data.uptime === 'number' && data.uptime > 0
+    ? Math.floor(data.uptime)
+    : connectStartTime
+    ? Math.floor((time.getTime() - connectStartTime) / 1000)
+    : 0;
+
+  const formatUptime = (sec) => {
+    if (sec <= 0) return '00:00:00';
+    const hrs = Math.floor(sec / 3600);
+    const mins = Math.floor((sec % 3600) / 60);
+    const secs = sec % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const uptimeStr = formatUptime(totalUptimeSec);
   const timeStr = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const updatedStr = hasReceivedData ? new Date(data.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Awaiting data';
 
@@ -59,7 +87,7 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
 
           <div className="topbar-divider" />
           <span className="mono" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-            TIME: <span style={{ color: 'var(--text-primary)' }}>{timeStr}</span>
+            UPTIME: <span style={{ color: connected && hasReceivedData ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 700 }}>{uptimeStr}</span>
           </span>
 
           <div className="topbar-divider" />
@@ -136,15 +164,19 @@ export default function DashboardNavbar({ connected, connectionState, messageCou
               <span className="mono font-bold" style={{ color: stateColor }}>{stateLabel}</span>
             </div>
             <div className="mobile-stat-row">
+              <span className="mobile-stat-label">DEVICE UPTIME</span>
+              <span className="mono font-bold" style={{ color: 'var(--accent-green)' }}>{uptimeStr}</span>
+            </div>
+            <div className="mobile-stat-row">
               <span className="mobile-stat-label">PWR / BATTERY</span>
-              <span className="mono font-bold" style={{ color: supplyColor }}>{data?.batteryVoltage?.toFixed(1) || '0.0'}V</span>
+              <span className="mono font-bold" style={{ color: supplyColor }}>{data?.batteryVoltage ? `${data.batteryVoltage.toFixed(1)}V` : '— V'}</span>
             </div>
             <div className="mobile-stat-row">
               <span className="mobile-stat-label">LORA RSSI</span>
-              <span className="mono font-bold" style={{ color: 'var(--primary)' }}>{data?.loraRSSI?.toFixed(0) || '—'} dBm</span>
+              <span className="mono font-bold" style={{ color: 'var(--primary)' }}>{data?.loraRSSI ? `${data.loraRSSI.toFixed(0)} dBm` : '—'}</span>
             </div>
             <div className="mobile-stat-row">
-              <span className="mobile-stat-label">TIME / UPDATED</span>
+              <span className="mobile-stat-label">LAST PACKET</span>
               <span className="mono text-muted">{updatedStr}</span>
             </div>
           </div>

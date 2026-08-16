@@ -21,8 +21,8 @@ export default function RawTelemetryTable({ data }) {
       { label: 'Longitude:', key: 'lng', unit: '°', sensor: 'NEO-6M' },
       { label: 'Satellites:', key: 'satellites', unit: '', sensor: 'NEO-6M' },
       { label: 'LoRa RSSI:', key: 'loraRSSI', unit: 'dBm', sensor: 'Ra-02' },
-      { label: 'LoRa SNR:', key: 'loraSNR', unit: 'dB', sensor: 'Ra-02' },
       { label: 'Supply V:', key: 'batteryVoltage', unit: 'V', sensor: 'Arduino' },
+      { label: 'Device Uptime:', key: 'uptime', unit: 's', sensor: 'System' },
     ]
   ];
 

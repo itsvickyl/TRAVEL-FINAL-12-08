@@ -370,5 +370,8 @@ void sendJSON() {
   Serial.print(F(",\"sd\":"));
   Serial.print(sdReady ? F("true") : F("false"));
 
+  Serial.print(F(",\"uptime\":"));
+  Serial.print(millis() / 1000);
+
   Serial.println(F("}"));
 }

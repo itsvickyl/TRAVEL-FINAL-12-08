@@ -83,6 +83,7 @@ const DEFAULT_STATE = {
   // Arduino
   batteryVoltage: 0,
   sd: false,
+  uptime: 0,
 
   timestamp: null,
 };
