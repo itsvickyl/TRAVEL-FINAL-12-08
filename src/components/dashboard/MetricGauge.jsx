@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 
 /**
- * Premium 270° instrument gauge with colored threshold arcs.
- * Arc sweeps from 225° (bottom-left) over the top to 495° / 135° (bottom-right).
- * Range indicators are placed cleanly above the meter.
+ * Premium 270° Aerospace Instrument Gauge
+ * ========================================
+ * High-visibility graduation numbers positioned along the outer perimeter of the meter.
+ * Arc sweeps from 225° (bottom-left) over the top to 495° (bottom-right).
  */
 export default function MetricGauge({
   value = 0,
@@ -12,7 +13,6 @@ export default function MetricGauge({
   label = '',
   unit = '',
   size = 200,
-  showLegend = true,
   thresholds, // [green, yellow, orange, red] boundaries, e.g. [20, 35, 42, 50]
 }) {
   const isValueValid = typeof value === 'number' && Number.isFinite(value);
@@ -20,8 +20,8 @@ export default function MetricGauge({
 
   const { bgArcs, needleAngle, ticks, segs, activeColor } = useMemo(() => {
     const cx = size / 2;
-    const cy = size * 0.48; // Centered slightly above midpoint so arch is balanced
-    const r = size * 0.35;  // Radius of arc
+    const cy = size * 0.48; // Centered to balance 270° sweep
+    const r = size * 0.32;  // Radius of arc
     const startAngle = 225; // Bottom-left
     const endAngle = 495;   // Bottom-right
     const totalAngle = endAngle - startAngle; // 270° sweep
@@ -87,20 +87,26 @@ export default function MetricGauge({
     const curAngle = startAngle + totalAngle * pct;
     const nAngle = curAngle - 90;
 
-    // Tick marks and numerical labels along arc
-    const tickValues = [min, ...segments];
-    const ticksArr = tickValues.map((val) => {
+    // Distinct visible numbers positioned OUTSIDE the meter arc
+    const tickValues = [
+      { val: min, color: 'var(--text-secondary)' },
+      ...segments.map((val, idx) => ({ val, color: colors[idx] || 'var(--text-secondary)' })),
+    ];
+
+    const ticksArr = tickValues.map(({ val, color }) => {
       const vPct = Math.max(0, Math.min(1, (val - min) / (max - min)));
       const angle = startAngle + totalAngle * vPct;
       const rad = ((angle - 90) * Math.PI) / 180;
       return {
-        x1: cx + (r + 4) * Math.cos(rad),
-        y1: cy + (r + 4) * Math.sin(rad),
-        x2: cx + (r - 6) * Math.cos(rad),
-        y2: cy + (r - 6) * Math.sin(rad),
-        lx: cx + (r - 18) * Math.cos(rad),
-        ly: cy + (r - 18) * Math.sin(rad),
+        x1: cx + (r + 2) * Math.cos(rad),
+        y1: cy + (r + 2) * Math.sin(rad),
+        x2: cx + (r + 7) * Math.cos(rad),
+        y2: cy + (r + 7) * Math.sin(rad),
+        // Positioned outside the colored arc with clear margin
+        lx: cx + (r + 17) * Math.cos(rad),
+        ly: cy + (r + 17) * Math.sin(rad),
         label: Math.round(val),
+        color: color,
       };
     });
 
@@ -115,36 +121,12 @@ export default function MetricGauge({
 
   const cx = size / 2;
   const cy = size * 0.48;
-  const needleLength = size * 0.35 - 12;
-  const svgHeight = size * 0.78;
+  const needleLength = size * 0.32 - 10;
+  const svgHeight = size * 0.82;
 
   return (
     <div className="gauge-container" style={{ width: '100%', maxWidth: size, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* Metric Ranges bar — above the meter */}
-      {showLegend && (
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 10,
-          padding: '3px 12px',
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid rgba(255, 255, 255, 0.07)',
-          borderRadius: 'var(--radius-full)',
-          marginBottom: 4,
-        }}>
-          {['#34d399', '#f59e0b', '#f97316', '#ef4444'].map((c, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: c, boxShadow: `0 0 6px ${c}80}` }} />
-              <span style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontWeight: 700 }}>
-                {(segs[i] || 0).toFixed(0)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* SVG 270° Arch Gauge */}
+      {/* SVG 270° Arch Gauge with Perimeter Graduation Numbers */}
       <svg
         width="100%"
         height="auto"
@@ -160,32 +142,38 @@ export default function MetricGauge({
             stroke={arc.color}
             strokeWidth="9"
             strokeLinecap="round"
-            opacity={isValueValid ? 0.9 : 0.3}
-            style={{ filter: isValueValid ? `drop-shadow(0 0 6px ${arc.color}35)` : 'none' }}
+            opacity={isValueValid ? 0.95 : 0.3}
+            style={{ filter: isValueValid ? `drop-shadow(0 0 6px ${arc.color}40)` : 'none' }}
           />
         ))}
 
-        {/* Tick marks & numerical labels */}
+        {/* Visible tick marks & perimeter numerical values */}
         {ticks.map((t, i) => (
           <g key={i}>
+            {/* Radial tick line */}
             <line
               x1={t.x1}
               y1={t.y1}
               x2={t.x2}
               y2={t.y2}
-              stroke="rgba(255,255,255,0.4)"
+              stroke="rgba(255, 255, 255, 0.4)"
               strokeWidth="1.5"
               strokeLinecap="round"
             />
+            {/* Highly visible metric number outside the arc */}
             <text
               x={t.lx}
               y={t.ly}
               textAnchor="middle"
               dominantBaseline="central"
-              fill="var(--text-muted)"
-              fontSize="9"
+              fill={t.color}
+              fontSize="10.5"
               fontFamily="var(--font-mono)"
-              fontWeight="700"
+              fontWeight="800"
+              style={{
+                textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                letterSpacing: '-0.02em',
+              }}
             >
               {t.label}
             </text>
@@ -202,18 +190,18 @@ export default function MetricGauge({
             stroke={activeColor}
             strokeWidth="2.5"
             strokeLinecap="round"
-            style={{ filter: isValueValid ? `drop-shadow(0 0 5px ${activeColor})` : 'none' }}
+            style={{ filter: isValueValid ? `drop-shadow(0 0 6px ${activeColor})` : 'none' }}
           />
         </g>
 
         {/* Center hub */}
-        <circle cx={cx} cy={cy} r="5.5" fill="var(--bg-dark)" stroke={activeColor} strokeWidth="2" />
+        <circle cx={cx} cy={cy} r="6" fill="var(--bg-dark)" stroke={activeColor} strokeWidth="2" />
         <circle cx={cx} cy={cy} r="2.5" fill={activeColor} />
 
-        {/* Large numerical readout & unit below needle hub */}
+        {/* Large central numerical readout & unit */}
         <text
           x={cx}
-          y={cy + 24}
+          y={cy + 22}
           textAnchor="middle"
           fill={activeColor}
           fontFamily="var(--font-mono)"
@@ -224,10 +212,10 @@ export default function MetricGauge({
         </text>
         <text
           x={cx}
-          y={cy + 38}
+          y={cy + 37}
           textAnchor="middle"
           fill="var(--text-muted)"
-          fontSize="0.65rem"
+          fontSize="0.68rem"
           fontWeight="700"
           letterSpacing="0.08em"
         >
@@ -236,7 +224,7 @@ export default function MetricGauge({
       </svg>
 
       {label && (
-        <div style={{ textAlign: 'center', marginTop: -4 }}>
+        <div style={{ textAlign: 'center', marginTop: 2 }}>
           <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
         </div>
       )}
