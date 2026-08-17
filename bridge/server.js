@@ -1,8 +1,21 @@
 /**
- * LollyD Travel Sensor — Serial-to-WebSocket Bridge (Production Enhanced)
- * ======================================================================
- * Reads JSON telemetry from Arduino/ESP32 via USB Serial and broadcasts
- * it to the dashboard at ws://localhost:8080.
+ * LollyD Travel Sensor — Serial-to-WebSocket Bridge
+ * ===================================================
+ * Reads JSON from Arduino UNO via USB Serial and broadcasts
+ * it to all connected WebSocket clients (the dashboard).
+ *
+ * USAGE:
+ *   1. Plug in Arduino UNO via USB
+ *   2. cd bridge && npm install
+ *   3. node server.js            (auto-detects COM port)
+ *      node server.js COM5       (or specify port manually)
+ *   4. Open dashboard → Connect to ws://localhost:8080
+ *
+ * The bridge also provides:
+ *   - Auto-detection of Arduino COM port
+ *   - Auto-reconnect if Arduino is unplugged/replugged
+ *   - HTTP status endpoint at http://localhost:8080/status
+ *   - Client count tracking
  */
 
 const { SerialPort } = require('serialport');
@@ -12,9 +25,11 @@ const http = require('http');
 
 // ─── CONFIG ────────────────────────────────
 const WS_PORT = 8080;
-const BAUD_RATE = parseInt(process.argv[3], 10) || 9600; // Default 9600 (or 115200 if specified)
+const BAUD_RATE = 9600;
 const RECONNECT_INTERVAL = 3000; // ms
 
+// Cloud relay — set this to your deployed Render.com URL
+// Example: wss://lollyd-relay.onrender.com
 const RELAY_URL = process.env.RELAY_URL || null;
 const RELAY_KEY = process.env.RELAY_KEY || '';
 
@@ -23,7 +38,7 @@ let serialPort = null;
 let lastData = null;
 let messageCount = 0;
 let connectedClients = 0;
-let portPath = process.argv[2] || null;
+let portPath = process.argv[2] || null; // Manual COM port override
 let relaySocket = null;
 let relayConnected = false;
 
@@ -31,26 +46,37 @@ let relayConnected = false;
 async function findArduinoPort() {
   const ports = await SerialPort.list();
 
+  // Look for Arduino UNO (common USB VID/PIDs)
   const arduinoKeywords = [
     'Arduino', 'CH340', 'CH341', 'FTDI', 'USB-SERIAL',
-    'USB Serial', 'ttyUSB', 'ttyACM', 'usbmodem', 'wch.cn',
-    'Silicon Labs', 'CP210'
+    'USB Serial', 'ttyUSB', 'ttyACM', 'usbmodem',
+    'wch.cn',  // CH340 vendor
+  ];
+
+  const arduinoVIDs = [
+    '2341', // Arduino
+    '1A86', // CH340/CH341 (common UNO clone)
+    '0403', // FTDI
+    '10C4', // CP210x
   ];
 
   for (const port of ports) {
     const desc = (port.manufacturer || '') + ' ' + (port.pnpId || '') + ' ' + (port.friendlyName || '');
-    if (arduinoKeywords.some(k => desc.toLowerCase().includes(k.toLowerCase()))) {
-      console.log(`🔍 Auto-detected Microcontroller on ${port.path} (${port.manufacturer || 'unknown'})`);
+    const vid = (port.vendorId || '').toUpperCase();
+
+    if (arduinoVIDs.includes(vid) || arduinoKeywords.some(k => desc.toLowerCase().includes(k.toLowerCase()))) {
+      console.log(`🔍 Auto-detected Arduino on ${port.path} (${port.manufacturer || 'unknown'})`);
       return port.path;
     }
   }
 
+  // Fallback: show all available ports
   if (ports.length > 0) {
-    console.log('\n📋 Available COM ports:');
+    console.log('\n📋 Available serial ports:');
     ports.forEach(p => {
-      console.log(`   ${p.path} — ${p.friendlyName || p.manufacturer || 'Serial Device'}`);
+      console.log(`   ${p.path} — ${p.manufacturer || 'unknown'} (VID: ${p.vendorId || '?'})`);
     });
-    console.log(`\n💡 Tip: Run "node server.js COM4" to specify port manually.\n`);
+    console.log(`\n💡 Tip: Run "node server.js COM3" to specify a port manually.\n`);
   }
 
   return null;
@@ -62,13 +88,13 @@ async function connectSerial() {
     const port = portPath || await findArduinoPort();
 
     if (!port) {
-      console.log('⚠️  No microcontroller detected. Plug in USB and restart.');
+      console.log('⚠️  No Arduino detected. Plug in your Arduino UNO and restart.');
       console.log(`   Retrying in ${RECONNECT_INTERVAL / 1000}s...\n`);
       setTimeout(connectSerial, RECONNECT_INTERVAL);
       return;
     }
 
-    console.log(`🔌 Opening serial port: ${port} @ ${BAUD_RATE} baud...`);
+    console.log(`🔌 Opening serial port: ${port} @ ${BAUD_RATE} baud`);
 
     serialPort = new SerialPort({
       path: port,
@@ -79,84 +105,73 @@ async function connectSerial() {
     const parser = serialPort.pipe(new ReadlineParser({ delimiter: '\n' }));
 
     serialPort.on('open', () => {
-      console.log(`\n======================================================`);
-      console.log(`✅ SUCCESS: Serial port ${port} opened @ ${BAUD_RATE} baud!`);
-      console.log(`📡 Listening for live telemetry packets from Arduino/ESP32...`);
-      console.log(`======================================================\n`);
+      console.log(`✅ Serial port ${port} opened successfully`);
     });
 
     parser.on('data', (line) => {
       const trimmed = line.trim();
-      if (!trimmed) return;
-
-      if (!trimmed.startsWith('{')) {
-        console.log(`📟 [RAW SERIAL]: ${trimmed}`);
-        return;
-      }
+      if (!trimmed.startsWith('{')) return; // Skip non-JSON lines
 
       try {
         const data = JSON.parse(trimmed);
 
-        if (data.status || data.warn || data.info) {
-          console.log(`📟 MCU Notification: ${data.status || data.warn || data.info}`);
+        // Skip error/status messages from Arduino
+        if (data.error || data.status) {
+          console.log(`📟 Arduino: ${data.error || data.status}`);
           return;
         }
 
         lastData = data;
         messageCount++;
 
-        // Broadcast to all connected dashboard WebSocket clients
+        // Broadcast to all local WebSocket clients
         wss.clients.forEach(client => {
           if (client.readyState === 1) { // WebSocket.OPEN
             client.send(trimmed);
           }
         });
 
-        // Forward to Cloud Relay if configured
+        // Forward to cloud relay
         if (relaySocket && relaySocket.readyState === WebSocket.OPEN) {
           relaySocket.send(trimmed);
         }
 
-        // Live output log for every packet
-        const seq = data.seq !== undefined ? `#${data.seq}` : `#${messageCount}`;
-        const temp = data.temperature !== undefined ? `${data.temperature.toFixed(1)}°C` : '—';
-        const hum = data.humidity !== undefined ? `${data.humidity.toFixed(1)}%` : '—';
-        const aqi = data.airQuality !== undefined ? `${data.airQuality.toFixed(0)} PPM` : '—';
-        const sats = data.satellites !== undefined ? `${data.satellites} Sats` : '0 Sats';
-        const motion = data.motionDetected ? '🔴 MOTION' : '⚪ Clear';
-        const clients = connectedClients > 0 ? `(${connectedClients} dashboard connected)` : `(Waiting for dashboard at ws://localhost:8080)`;
-
-        console.log(`📡 [PACKET ${seq}] Temp: ${temp} | Hum: ${hum} | AQ: ${aqi} | GPS: ${sats} | PIR: ${motion} ${clients}`);
+        // Log every 10th message to avoid spam
+        if (messageCount % 10 === 0) {
+          const sats = data.satellites || 0;
+          const temp = data.temperature?.toFixed(1) || '?';
+          const aq = data.airQuality?.toFixed(0) || '?';
+          const motion = data.motionDetected ? '🔴' : '⚪';
+          console.log(`📡 #${messageCount} | ${connectedClients} clients | Sats:${sats} Temp:${temp}°C AQ:${aq}PPM PIR:${motion}`);
+        }
       } catch (err) {
-        console.log(`⚠️ Non-JSON Serial Frame: ${trimmed}`);
+        // Not valid JSON, ignore (could be partial line or debug output)
       }
     });
 
     serialPort.on('error', (err) => {
-      console.error(`\n❌ Serial error: ${err.message}`);
-      if (err.message.includes('Access denied') || err.message.includes('Permission denied')) {
-        console.error(`💡 IMPORTANT: Close the Serial Monitor in Arduino IDE so Node can access ${port}!`);
-      }
+      console.error(`❌ Serial error: ${err.message}`);
     });
 
     serialPort.on('close', () => {
-      console.log('🔌 Serial port closed. Retrying...');
+      console.log('🔌 Serial port closed. Reconnecting...');
       serialPort = null;
       setTimeout(connectSerial, RECONNECT_INTERVAL);
     });
 
   } catch (err) {
     console.error(`❌ Failed to open serial: ${err.message}`);
+    console.log(`   Retrying in ${RECONNECT_INTERVAL / 1000}s...`);
     setTimeout(connectSerial, RECONNECT_INTERVAL);
   }
 }
 
-// ─── HTTP SERVER (Status Endpoint) ─────────
+// ─── HTTP SERVER (for status endpoint) ─────
 const httpServer = http.createServer((req, res) => {
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({
-      serial: serialPort && serialPort.isOpen ? 'connected' : 'disconnected',
+      serial: serialPort ? 'connected' : 'disconnected',
       clients: connectedClients,
       messages: messageCount,
       lastData,
@@ -172,30 +187,80 @@ const wss = new WebSocketServer({ server: httpServer });
 
 wss.on('connection', (ws) => {
   connectedClients++;
-  console.log(`\n🌐 DASHBOARD CONNECTED! (${connectedClients} active subscriber)`);
+  console.log(`🌐 Dashboard connected (${connectedClients} total)`);
 
+  // Send last known data immediately so dashboard doesn't start blank
   if (lastData) {
-    try {
-      ws.send(JSON.stringify(lastData));
-    } catch {}
+    ws.send(JSON.stringify(lastData));
   }
 
   ws.on('close', () => {
-    connectedClients = Math.max(0, connectedClients - 1);
-    console.log(`🌐 Dashboard disconnected (${connectedClients} remaining)`);
+    connectedClients--;
+    console.log(`🌐 Dashboard disconnected (${connectedClients} total)`);
   });
 });
 
-// ─── START SERVER ──────────────────────────
+// ─── CLOUD RELAY CONNECTION ─────────────────
+function connectRelay() {
+  if (!RELAY_URL) return;
+
+  let targetUrl = RELAY_URL.trim();
+  if (targetUrl.startsWith('https://')) {
+    targetUrl = 'wss://' + targetUrl.slice(8);
+  } else if (targetUrl.startsWith('http://')) {
+    targetUrl = 'ws://' + targetUrl.slice(7);
+  }
+
+  console.log(`☁️  Connecting to cloud relay: ${targetUrl}`);
+
+  try {
+    relaySocket = new WebSocket(targetUrl);
+
+    relaySocket.on('open', () => {
+      relayConnected = true;
+      // Authenticate as publisher
+      relaySocket.send(JSON.stringify({ role: 'publisher', key: RELAY_KEY }));
+      console.log(`☁️  Cloud relay connected!`);
+    });
+
+    relaySocket.on('message', (msg) => {
+      try {
+        const data = JSON.parse(msg.toString());
+        if (data.status === 'authenticated') {
+          console.log(`☁️  Relay authenticated as publisher`);
+        } else if (data.error) {
+          console.error(`☁️  Relay error: ${data.error}`);
+        }
+      } catch { }
+    });
+
+    relaySocket.on('close', () => {
+      relayConnected = false;
+      console.log(`☁️  Relay disconnected. Reconnecting in 5s...`);
+      setTimeout(connectRelay, 5000);
+    });
+
+    relaySocket.on('error', (err) => {
+      console.error(`☁️  Relay error: ${err.message}`);
+    });
+  } catch (err) {
+    console.error(`☁️  Failed to connect relay: ${err.message}`);
+    setTimeout(connectRelay, 5000);
+  }
+}
+
+// ─── START ──────────────────────────────────
 httpServer.listen(WS_PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════╗
-║   LollyD Travel Sensor — USB Serial Bridge       ║
+║   LollyD Travel Sensor — WebSocket Bridge        ║
 ╠══════════════════════════════════════════════════╣
 ║   WebSocket:  ws://localhost:${WS_PORT}                ║
 ║   Status:     http://localhost:${WS_PORT}/status         ║
 ║   Baud Rate:  ${BAUD_RATE}                              ║
+║   Relay:      ${RELAY_URL || 'disabled (set RELAY_URL)'}${' '.repeat(Math.max(0, 33 - (RELAY_URL || 'disabled (set RELAY_URL)').length))}║
 ╚══════════════════════════════════════════════════╝
   `);
   connectSerial();
+  connectRelay();
 });
